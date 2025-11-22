@@ -15,10 +15,14 @@ const HistoryLog: React.FC = () => {
     // Kita balik urutannya di UI agar yang terbaru ada di paling atas (tabel biasanya begitu)
     setLogs([...allLogs].reverse());
 
-    // Realtime update (opsional)
+    // Realtime update (opsional) - Gunakan interval yang lebih efisien
     const interval = setInterval(() => {
-        setLogs([...GeminiService.getHistory()].reverse()); 
-    }, 2000);
+      const updatedLogs = GeminiService.getHistory();
+      // Bandingkan panjang logs untuk menentukan apakah perlu update
+      if (updatedLogs.length !== logs.length) {
+        setLogs([...updatedLogs].reverse());
+      }
+    }, 5000); // Perbarui setiap 5 detik, bukan 2 detik
     return () => clearInterval(interval);
   }, []);
 
@@ -81,7 +85,7 @@ const HistoryLog: React.FC = () => {
                                             {item.source === 'API' ? <Server size={16} /> : <Database size={16} />}
                                         </div>
                                     </td>
-                                    
+
                                     {/* Fitur */}
                                     <td className="p-4">
                                         <span className="font-semibold text-slate-900 text-sm">{item.feature}</span>
@@ -124,9 +128,9 @@ const HistoryLog: React.FC = () => {
                     <p className="text-sm text-slate-500">
                         Menampilkan <span className="font-medium text-slate-900">{startIndex + 1}</span> - <span className="font-medium text-slate-900">{Math.min(startIndex + ITEMS_PER_PAGE, logs.length)}</span> dari {logs.length} data
                     </p>
-                    
+
                     <div className="flex items-center gap-2">
-                        <button 
+                        <button
                             onClick={handlePrev}
                             disabled={currentPage === 1}
                             className="p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -136,7 +140,7 @@ const HistoryLog: React.FC = () => {
                         <span className="text-sm font-medium text-slate-700 px-2">
                             Halaman {currentPage} / {totalPages || 1}
                         </span>
-                        <button 
+                        <button
                             onClick={handleNext}
                             disabled={currentPage === totalPages}
                             className="p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

@@ -9,20 +9,43 @@ const HISTORY_STORAGE_KEY = 'indolingua_history_v1';
 
 // --- STORAGE ---
 const cache = {
-  vocab: new Map<string, VocabResult>(),
-  translation: new Map<string, TranslationResult>(),
+  vocab: new Map<string, { data: VocabResult, timestamp: number }>(),
+  translation: new Map<string, { data: TranslationResult, timestamp: number }>(),
 };
+
+// Cache expiration time (1 hour)
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+
+// Function to clean expired cache entries
+function cleanExpiredCache() {
+  const now = Date.now();
+  // Clean vocab cache
+  for (const [key, value] of cache.vocab.entries()) {
+    if (now - value.timestamp > CACHE_DURATION) {
+      cache.vocab.delete(key);
+    }
+  }
+  // Clean translation cache
+  for (const [key, value] of cache.translation.entries()) {
+    if (now - value.timestamp > CACHE_DURATION) {
+      cache.translation.delete(key);
+    }
+  }
+}
 
 // --- LOAD HISTORY ---
 let requestHistory: HistoryItem[] = [];
 
 try {
-  const saved = localStorage.getItem(HISTORY_STORAGE_KEY);
-  if (saved) {
-    requestHistory = JSON.parse(saved).map((item: any) => ({
-      ...item,
-      timestamp: new Date(item.timestamp) 
-    }));
+  // Cek dulu apakah localStorage tersedia
+  if (typeof Storage !== 'undefined' && localStorage) {
+    const saved = localStorage.getItem(HISTORY_STORAGE_KEY);
+    if (saved) {
+      requestHistory = JSON.parse(saved).map((item: any) => ({
+        ...item,
+        timestamp: new Date(item.timestamp)
+      }));
+    }
   }
 } catch (error) {
   console.error("History error:", error);
@@ -42,7 +65,10 @@ const addToHistory = (feature: string, details: string, source: 'API' | 'CACHE',
   if (requestHistory.length > 50) requestHistory.shift();
   try {
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(requestHistory));
-  } catch (e) {}
+  } catch (e) {
+    // Jika localStorage penuh atau error, abaikan saja, tidak perlu crash aplikasi
+    console.warn("Tidak bisa menyimpan ke localStorage:", e);
+  }
 };
 
 // --- BALANCED SYSTEM INSTRUCTION ---
@@ -62,7 +88,7 @@ async function callWithRetry<T>(apiCall: () => Promise<T>, retries = 3, delay = 
       const isRateLimit = error?.response?.status === 429 || error?.status === 429;
       if (isRateLimit && i < retries - 1) {
         await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2; 
+        delay *= 2;
       } else {
         throw error;
       }
@@ -75,7 +101,11 @@ export const GeminiService = {
   getHistory: () => requestHistory,
   clearHistory: () => {
     requestHistory = [];
-    localStorage.removeItem(HISTORY_STORAGE_KEY);
+    try {
+      localStorage.removeItem(HISTORY_STORAGE_KEY);
+    } catch (e) {
+      console.warn("Tidak bisa menghapus dari localStorage:", e);
+    }
   },
 
   // FUNGSI CHAT DIHAPUS
@@ -83,9 +113,18 @@ export const GeminiService = {
   // 2. Translate & Explain (BALANCED)
   translateAndExplain: async (text: string): Promise<TranslationResult> => {
     const key = text.trim().toLowerCase();
+    cleanExpiredCache(); // Clean expired entries before checking cache
+
     if (cache.translation.has(key)) {
-      addToHistory("Translator", `Menerjemahkan: "${text.substring(0, 20)}..."`, "CACHE", 0);
-      return cache.translation.get(key)!;
+      const cachedValue = cache.translation.get(key)!;
+      // Check if cache entry is still valid
+      if (Date.now() - cachedValue.timestamp <= CACHE_DURATION) {
+        addToHistory("Translator", `Menerjemahkan: "${text.substring(0, 20)}..."`, "CACHE", 0);
+        return cachedValue.data;
+      } else {
+        // Remove expired entry
+        cache.translation.delete(key);
+      }
     }
 
     const wrapper = await callWithRetry(async () => {
@@ -108,12 +147,12 @@ export const GeminiService = {
       });
       return {
         data: JSON.parse(response.text || "{}"),
-        tokens: response.usageMetadata?.totalTokenCount || 0 
+        tokens: response.usageMetadata?.totalTokenCount || 0
       };
     });
 
     const result = wrapper.data;
-    cache.translation.set(key, result);
+    cache.translation.set(key, { data: result, timestamp: Date.now() });
     addToHistory("Translator", `Menerjemahkan: "${text.substring(0, 20)}..."`, "API", wrapper.tokens);
     return result;
   },
@@ -121,9 +160,18 @@ export const GeminiService = {
   // 3. Vocab Builder (QUALITY RESTORED)
   explainVocab: async (word: string): Promise<VocabResult> => {
     const key = word.trim().toLowerCase();
+    cleanExpiredCache(); // Clean expired entries before checking cache
+
     if (cache.vocab.has(key)) {
-      addToHistory("Vocab Builder", `Mencari kata: "${word}"`, "CACHE", 0);
-      return cache.vocab.get(key)!;
+      const cachedValue = cache.vocab.get(key)!;
+      // Check if cache entry is still valid
+      if (Date.now() - cachedValue.timestamp <= CACHE_DURATION) {
+        addToHistory("Vocab Builder", `Mencari kata: "${word}"`, "CACHE", 0);
+        return cachedValue.data;
+      } else {
+        // Remove expired entry
+        cache.vocab.delete(key);
+      }
     }
 
     const wrapper = await callWithRetry(async () => {
@@ -157,7 +205,7 @@ export const GeminiService = {
     });
 
     const result = wrapper.data;
-    cache.vocab.set(key, result);
+    cache.vocab.set(key, { data: result, timestamp: Date.now() });
     addToHistory("Vocab Builder", `Mencari kata: "${word}"`, "API", wrapper.tokens);
     return result;
   },
@@ -189,7 +237,7 @@ export const GeminiService = {
         tokens: response.usageMetadata?.totalTokenCount || 0
       };
     });
-    
+
     addToHistory("Grammar Practice", `Generate soal level ${level}`, "API", wrapper.tokens);
     return wrapper.data;
   },
@@ -199,9 +247,9 @@ export const GeminiService = {
     const wrapper = await callWithRetry(async () => {
       const response = await ai.models.generateContent({
         model: MODEL_NAME,
-        contents: `Evaluate this translation. Context: ${scenario}. Target: ${englishPhrase}. User: ${userTranslation}. 
-        Give a score (1-10). 
-        Feedback: Explain in Indonesian where the user can improve (grammar/vocab). 
+        contents: `Evaluate this translation. Context: ${scenario}. Target: ${englishPhrase}. User: ${userTranslation}.
+        Give a score (1-10).
+        Feedback: Explain in Indonesian where the user can improve (grammar/vocab).
         Improved Response: The most natural way to say it in Indonesian.`,
         config: {
           systemInstruction: TUTOR_INSTRUCTION,

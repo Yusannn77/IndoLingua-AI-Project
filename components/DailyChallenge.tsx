@@ -2,27 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { Trophy, Send, Star, RefreshCcw } from 'lucide-react';
 import { GeminiService } from '../services/geminiService';
 import { ChallengeScenario, ChallengeFeedback } from '../types';
+// Import data lokal yang sudah Anda miliki
+import { dailyChallenges } from '../data/dailyChallenges';
 
 const DailyChallenge: React.FC = () => {
   const [scenario, setScenario] = useState<ChallengeScenario | null>(null);
   const [response, setResponse] = useState('');
   const [feedback, setFeedback] = useState<ChallengeFeedback | null>(null);
-  const [loadingScenario, setLoadingScenario] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const loadChallenge = async () => {
-    setLoadingScenario(true);
-    setScenario(null);
+  // Fungsi ambil soal dari file lokal (GRATIS KUOTA)
+  const loadChallenge = () => {
     setFeedback(null);
     setResponse('');
-    try {
-      const data = await GeminiService.getDailyChallenge();
-      setScenario(data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoadingScenario(false);
-    }
+    
+    // Ambil 1 soal acak dari 500 data
+    const randomIndex = Math.floor(Math.random() * dailyChallenges.length);
+    const challengeData = dailyChallenges[randomIndex];
+
+    // Format agar sesuai dengan tipe data aplikasi
+    setScenario({
+        scenario: challengeData.konteks,
+        goal: challengeData.englishSentence
+    });
   };
 
   useEffect(() => {
@@ -33,7 +35,7 @@ const DailyChallenge: React.FC = () => {
     if (!scenario || !response.trim()) return;
     setSubmitting(true);
     try {
-      // Changed to pass the English goal + User translation
+      // API hanya dipanggil SAAT user mengirim jawaban
       const result = await GeminiService.evaluateChallengeResponse(scenario.scenario, scenario.goal, response);
       setFeedback(result);
     } catch (error) {
@@ -53,12 +55,9 @@ const DailyChallenge: React.FC = () => {
         <p className="text-slate-600">Asah kemampuan percakapanmu dalam situasi nyata.</p>
       </div>
 
-      {loadingScenario ? (
-        <div className="h-40 bg-slate-100 rounded-xl animate-pulse" />
-      ) : (
-        scenario && (
+      {scenario && (
           <div className="space-y-6">
-            {/* Scenario Card */}
+            {/* Tampilan Kartu Soal */}
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm relative overflow-hidden">
                <div className="absolute top-0 right-0 w-24 h-24 bg-brand-50 rounded-bl-full -mr-8 -mt-8 z-0" />
                <div className="relative z-10">
@@ -76,7 +75,7 @@ const DailyChallenge: React.FC = () => {
                </div>
             </div>
 
-            {/* Input Area */}
+            {/* Input Jawaban */}
             {!feedback ? (
               <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
                 <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -101,7 +100,7 @@ const DailyChallenge: React.FC = () => {
                 </div>
               </div>
             ) : (
-              /* Feedback Card */
+              /* Kartu Feedback (Hasil Penilaian) */
               <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm animate-slide-up">
                  <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
                     <h3 className="font-bold text-lg text-slate-900">Hasil Evaluasi</h3>
@@ -132,7 +131,6 @@ const DailyChallenge: React.FC = () => {
               </div>
             )}
           </div>
-        )
       )}
     </div>
   );

@@ -1,140 +1,229 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { TranslationResult, VocabResult, GrammarQuestion, ChallengeScenario, ChallengeFeedback } from "../types";
+import { TranslationResult, VocabResult, GrammarQuestion, ChallengeFeedback, HistoryItem } from "../types";
 
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
 const MODEL_NAME = 'gemini-2.5-flash';
+const HISTORY_STORAGE_KEY = 'indolingua_history_v1';
 
-// --- Helper for System Instructions ---
-const SYSTEM_INSTRUCTION_BASE = `
-Anda adalah IndoLingua, tutor bahasa Inggris pribadi untuk orang Indonesia. 
-Gaya bicara anda ramah, sabar, dan suportif. 
-Gunakan Bahasa Indonesia untuk menjelaskan konsep grammar atau koreksi agar mudah dipahami.
-Tujuan utama adalah membuat pengguna percaya diri, bukan takut salah grammar.
+// --- STORAGE ---
+const cache = {
+  vocab: new Map<string, VocabResult>(),
+  translation: new Map<string, TranslationResult>(),
+};
+
+// --- LOAD HISTORY ---
+let requestHistory: HistoryItem[] = [];
+
+try {
+  const saved = localStorage.getItem(HISTORY_STORAGE_KEY);
+  if (saved) {
+    requestHistory = JSON.parse(saved).map((item: any) => ({
+      ...item,
+      timestamp: new Date(item.timestamp) 
+    }));
+  }
+} catch (error) {
+  console.error("History error:", error);
+  requestHistory = [];
+}
+
+const addToHistory = (feature: string, details: string, source: 'API' | 'CACHE', tokens?: number) => {
+  const newItem: HistoryItem = {
+    id: Date.now().toString() + Math.random().toString().slice(2, 5),
+    timestamp: new Date(),
+    feature,
+    details,
+    source,
+    tokens
+  };
+  requestHistory.push(newItem);
+  if (requestHistory.length > 50) requestHistory.shift();
+  try {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(requestHistory));
+  } catch (e) {}
+};
+
+// --- BALANCED SYSTEM INSTRUCTION ---
+const TUTOR_INSTRUCTION = `
+You are IndoLingua, a helpful English tutor for Indonesians.
+Output JSON ONLY.
+Your goal is to provide CLEAR and HELPFUL explanations.
+For nuances and context, use natural Indonesian language that is easy to understand.
 `;
 
+// --- RETRY LOGIC ---
+async function callWithRetry<T>(apiCall: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await apiCall();
+    } catch (error: any) {
+      const isRateLimit = error?.response?.status === 429 || error?.status === 429;
+      if (isRateLimit && i < retries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; 
+      } else {
+        throw error;
+      }
+    }
+  }
+  throw new Error("Max retries reached");
+}
+
 export const GeminiService = {
-  // 1. Chat Tutor
-  createChat: () => {
-    return ai.chats.create({
-      model: MODEL_NAME,
-      config: {
-        systemInstruction: `${SYSTEM_INSTRUCTION_BASE} 
-        Dalam mode Chat, ajak pengguna mengobrol santai. Jika mereka salah grammar, perbaiki dengan sopan di akhir respon (format: 'Koreksi kecil: ...').`,
-      },
-    });
+  getHistory: () => requestHistory,
+  clearHistory: () => {
+    requestHistory = [];
+    localStorage.removeItem(HISTORY_STORAGE_KEY);
   },
 
-  // 2. Translate & Explain
+  // FUNGSI CHAT DIHAPUS
+
+  // 2. Translate & Explain (BALANCED)
   translateAndExplain: async (text: string): Promise<TranslationResult> => {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: `Translate this Indonesian sentence to English naturally, explain the grammar simply, and give variations: "${text}"`,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION_BASE,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            translation: { type: Type.STRING },
-            explanation: { type: Type.STRING, description: "Explain why this translation is used in Bahasa Indonesia" },
-            variations: { type: Type.ARRAY, items: { type: Type.STRING } }
-          },
-          required: ["translation", "explanation", "variations"]
+    const key = text.trim().toLowerCase();
+    if (cache.translation.has(key)) {
+      addToHistory("Translator", `Menerjemahkan: "${text.substring(0, 20)}..."`, "CACHE", 0);
+      return cache.translation.get(key)!;
+    }
+
+    const wrapper = await callWithRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: `Translate to English naturally. Explain the grammar structure clearly in Indonesian (why is it translated this way?). Give 3 natural sentence variations. Input: "${text}"`,
+        config: {
+          systemInstruction: TUTOR_INSTRUCTION,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              translation: { type: Type.STRING },
+              explanation: { type: Type.STRING },
+              variations: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ["translation", "explanation", "variations"]
+          }
         }
-      }
+      });
+      return {
+        data: JSON.parse(response.text || "{}"),
+        tokens: response.usageMetadata?.totalTokenCount || 0 
+      };
     });
-    return JSON.parse(response.text || "{}");
+
+    const result = wrapper.data;
+    cache.translation.set(key, result);
+    addToHistory("Translator", `Menerjemahkan: "${text.substring(0, 20)}..."`, "API", wrapper.tokens);
+    return result;
   },
 
-  // 3. Vocab Builder
+  // 3. Vocab Builder (QUALITY RESTORED)
   explainVocab: async (word: string): Promise<VocabResult> => {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: `Explain the English word "${word}" for an Indonesian learner. Include meaning, context usage in Indonesia, comparisons (nuances), and synonyms.`,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION_BASE,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            word: { type: Type.STRING },
-            meaning: { type: Type.STRING, description: "Meaning in Bahasa Indonesia" },
-            context_usage: { type: Type.STRING, description: "Example sentence and context relevant to Indonesians" },
-            nuance_comparison: { type: Type.STRING, description: "Compare with similar words (e.g., see vs look)" },
-            synonyms: { type: Type.ARRAY, items: { type: Type.STRING } }
-          },
-          required: ["word", "meaning", "context_usage", "nuance_comparison", "synonyms"]
+    const key = word.trim().toLowerCase();
+    if (cache.vocab.has(key)) {
+      addToHistory("Vocab Builder", `Mencari kata: "${word}"`, "CACHE", 0);
+      return cache.vocab.get(key)!;
+    }
+
+    const wrapper = await callWithRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: `Explain the word "${word}" for an Indonesian learner.
+        1. Meaning: In Indonesian.
+        2. Context Usage: A full, natural English sentence examples with its Indonesian translation.
+        3. Nuance: Explain in Indonesian how this word differs from its synonyms or when to use it properly (give a solid explanation).
+        4. Synonyms: List 3 synonyms.`,
+        config: {
+          systemInstruction: TUTOR_INSTRUCTION,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              word: { type: Type.STRING },
+              meaning: { type: Type.STRING },
+              context_usage: { type: Type.STRING },
+              nuance_comparison: { type: Type.STRING },
+              synonyms: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ["word", "meaning", "context_usage", "nuance_comparison", "synonyms"]
+          }
         }
-      }
+      });
+      return {
+        data: JSON.parse(response.text || "{}"),
+        tokens: response.usageMetadata?.totalTokenCount || 0
+      };
     });
-    return JSON.parse(response.text || "{}");
+
+    const result = wrapper.data;
+    cache.vocab.set(key, result);
+    addToHistory("Vocab Builder", `Mencari kata: "${word}"`, "API", wrapper.tokens);
+    return result;
   },
 
   // 4. Grammar Practice
   generateGrammarQuestion: async (level: 'beginner' | 'intermediate'): Promise<GrammarQuestion> => {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: `Generate a multiple choice grammar question for ${level} level learners. Focus on common mistakes Indonesians make (e.g., to be, tenses).`,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION_BASE,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            id: { type: Type.STRING },
-            question: { type: Type.STRING },
-            options: { type: Type.ARRAY, items: { type: Type.STRING } },
-            correctIndex: { type: Type.INTEGER },
-            explanation: { type: Type.STRING, description: "Explanation in Bahasa Indonesia" }
-          },
-          required: ["question", "options", "correctIndex", "explanation"]
+    const wrapper = await callWithRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: `Generate 1 multiple choice grammar question (${level}) relevant for Indonesians. Provide a helpful explanation in Indonesian why the answer is correct.`,
+        config: {
+          systemInstruction: TUTOR_INSTRUCTION,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              question: { type: Type.STRING },
+              options: { type: Type.ARRAY, items: { type: Type.STRING } },
+              correctIndex: { type: Type.INTEGER },
+              explanation: { type: Type.STRING }
+            },
+            required: ["question", "options", "correctIndex", "explanation"]
+          }
         }
-      }
+      });
+      return {
+        data: JSON.parse(response.text || "{}"),
+        tokens: response.usageMetadata?.totalTokenCount || 0
+      };
     });
-    return JSON.parse(response.text || "{}");
+    
+    addToHistory("Grammar Practice", `Generate soal level ${level}`, "API", wrapper.tokens);
+    return wrapper.data;
   },
 
-  // 5. Daily Challenge
-  getDailyChallenge: async (): Promise<ChallengeScenario> => {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: "Generate a short daily conversational scenario (e.g. ordering food, asking directions, introducing self).",
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION_BASE,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            scenario: { type: Type.STRING, description: "The situation description in Bahasa Indonesia" },
-            goal: { type: Type.STRING, description: "The English sentence the user needs to learn/translate." }
-          },
-          required: ["scenario", "goal"]
-        }
-      }
-    });
-    return JSON.parse(response.text || "{}");
-  },
-
+  // 5. Daily Challenge Evaluation
   evaluateChallengeResponse: async (scenario: string, englishPhrase: string, userTranslation: string): Promise<ChallengeFeedback> => {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: `Context: ${scenario}. \nTask: Translate the English phrase "${englishPhrase}" into Bahasa Indonesia. \nUser's Translation: "${userTranslation}". \nEvaluate this translation based on accuracy and naturalness in Indonesian.`,
-      config: {
-        systemInstruction: "You are a supportive tutor. Give a score 1-10. Explain clearly in Indonesian. Provide the most natural Indonesian translation as improved_response.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            score: { type: Type.NUMBER },
-            feedback: { type: Type.STRING },
-            improved_response: { type: Type.STRING, description: "The ideal/natural Indonesian translation" }
-          },
-          required: ["score", "feedback", "improved_response"]
+    const wrapper = await callWithRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: `Evaluate this translation. Context: ${scenario}. Target: ${englishPhrase}. User: ${userTranslation}. 
+        Give a score (1-10). 
+        Feedback: Explain in Indonesian where the user can improve (grammar/vocab). 
+        Improved Response: The most natural way to say it in Indonesian.`,
+        config: {
+          systemInstruction: TUTOR_INSTRUCTION,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              score: { type: Type.NUMBER },
+              feedback: { type: Type.STRING },
+              improved_response: { type: Type.STRING }
+            },
+            required: ["score", "feedback", "improved_response"]
+          }
         }
-      }
+      });
+      return {
+        data: JSON.parse(response.text || "{}"),
+        tokens: response.usageMetadata?.totalTokenCount || 0
+      };
     });
-    return JSON.parse(response.text || "{}");
+
+    addToHistory("Daily Challenge", "Evaluasi jawaban user", "API", wrapper.tokens);
+    return wrapper.data;
   }
 };

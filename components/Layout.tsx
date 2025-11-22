@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AppView } from '../types';
-import { MessageCircle, Languages, BookOpen, CheckSquare, Trophy, Menu, X, GraduationCap } from 'lucide-react';
+import { Languages, BookOpen, CheckSquare, Trophy, Menu, X, GraduationCap, History as HistoryIcon } from 'lucide-react';
 
 interface LayoutProps {
   currentView: AppView;
@@ -12,11 +12,12 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, children }) =>
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
-    { view: AppView.CHAT, label: 'Tutor Chat', icon: MessageCircle },
+    // CHAT ITEM DIHAPUS DARI SINI
     { view: AppView.TRANSLATE, label: 'Terjemah & Jelaskan', icon: Languages },
     { view: AppView.VOCAB, label: 'Kamus Kontekstual', icon: BookOpen },
     { view: AppView.GRAMMAR, label: 'Latihan Grammar', icon: CheckSquare },
     { view: AppView.CHALLENGE, label: 'Tantangan Harian', icon: Trophy },
+    { view: AppView.HISTORY, label: 'Riwayat Request', icon: HistoryIcon },
   ];
 
   const handleNav = (view: AppView) => {
@@ -40,7 +41,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, children }) =>
         `}
       >
         <div className="flex items-center justify-between h-16 px-6 border-b border-slate-100">
-          <div className="flex items-center gap-2 text-brand-600" onClick={() => handleNav(AppView.HOME)}>
+          <div className="flex items-center gap-2 text-brand-600 cursor-pointer" onClick={() => handleNav(AppView.HOME)}>
             <GraduationCap size={28} />
             <span className="text-xl font-bold tracking-tight">IndoLingua.ai</span>
           </div>
@@ -70,7 +71,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, children }) =>
         <div className="absolute bottom-0 left-0 right-0 p-4">
           <div className="bg-gradient-to-br from-brand-500 to-brand-600 rounded-xl p-4 text-white">
             <p className="text-xs font-medium text-brand-100 uppercase mb-1">Pro Tip</p>
-            <p className="text-sm">Jangan takut salah! AI Tutor akan membantumu memperbaiki grammar.</p>
+            <p className="text-sm">Gunakan fitur Riwayat untuk memantau penggunaan kuota API.</p>
           </div>
         </div>
       </aside>

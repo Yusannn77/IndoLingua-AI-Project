@@ -1,17 +1,22 @@
 export enum AppView {
-  CHAT = 'CHAT',
+  // CHAT dihapus
   TRANSLATE = 'TRANSLATE',
   VOCAB = 'VOCAB',
   GRAMMAR = 'GRAMMAR',
   CHALLENGE = 'CHALLENGE',
+  HISTORY = 'HISTORY',
   HOME = 'HOME'
 }
 
-export interface ChatMessage {
+// ChatMessage interface dihapus karena fitur Chat Tutor dihapus
+
+export interface HistoryItem {
   id: string;
-  role: 'user' | 'model';
-  text: string;
-  isError?: boolean;
+  timestamp: Date;
+  feature: string;
+  details: string;
+  source: 'API' | 'CACHE';
+  tokens?: number;
 }
 
 export interface TranslationResult {

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, HelpCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, HelpCircle, Loader2, Sparkles, BookOpen } from 'lucide-react';
 import { GeminiService } from '../services/geminiService';
 import { GrammarQuestion } from '../types';
+import { beginnerQuestions, intermediateQuestions } from '../data/grammarQuestions';
 
 const GrammarPractice: React.FC = () => {
   const [question, setQuestion] = useState<GrammarQuestion | null>(null);
@@ -9,15 +10,31 @@ const GrammarPractice: React.FC = () => {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [difficulty, setDifficulty] = useState<'beginner' | 'intermediate'>('beginner');
+  const [source, setSource] = useState<'LOCAL' | 'AI'>('LOCAL');
 
-  const fetchQuestion = async () => {
+  const fetchQuestion = async (forceAI: boolean = false) => {
     setLoading(true);
     setQuestion(null);
     setSelectedIdx(null);
     setShowResult(false);
+
     try {
-      const q = await GeminiService.generateGrammarQuestion(difficulty);
-      setQuestion(q);
+      if (!forceAI) {
+        // OPSI 1: AMBIL DARI DATA LOKAL (GRATIS)
+        const dataset = difficulty === 'beginner' ? beginnerQuestions : intermediateQuestions;
+        const randomIdx = Math.floor(Math.random() * dataset.length);
+        
+        // Simulasi loading sekejap agar transisi UI lebih halus
+        await new Promise(r => setTimeout(r, 400));
+        
+        setQuestion(dataset[randomIdx]);
+        setSource('LOCAL');
+      } else {
+        // OPSI 2: GENERATE VIA AI (BAYAR TOKEN)
+        const q = await GeminiService.generateGrammarQuestion(difficulty);
+        setQuestion(q);
+        setSource('AI');
+      }
     } catch (error) {
       console.error("Failed to fetch question", error);
     } finally {
@@ -25,8 +42,9 @@ const GrammarPractice: React.FC = () => {
     }
   };
 
+  // Load soal lokal saat pertama kali komponen dibuka atau saat level kesulitan berubah
   useEffect(() => {
-    fetchQuestion();
+    fetchQuestion(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [difficulty]);
 
@@ -38,6 +56,7 @@ const GrammarPractice: React.FC = () => {
 
   return (
     <div className="max-w-2xl mx-auto">
+      {/* Header & Difficulty Toggle */}
       <div className="flex justify-between items-center mb-8">
         <h2 className="text-2xl font-bold text-slate-900">Latihan Grammar</h2>
         <div className="flex bg-slate-100 p-1 rounded-lg">
@@ -56,38 +75,44 @@ const GrammarPractice: React.FC = () => {
         </div>
       </div>
 
+      {/* Loading State */}
       {loading && (
         <div className="h-64 flex flex-col items-center justify-center text-slate-400">
           <Loader2 className="animate-spin mb-4" size={32} />
-          <p>Sedang membuat soal baru...</p>
+          <p>{source === 'AI' ? 'Sedang membuat soal baru dengan AI...' : 'Mengambil soal latihan...'}</p>
         </div>
       )}
 
+      {/* Question Card */}
       {!loading && question && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-fade-in">
           <div className="p-6 md:p-8 border-b border-slate-100">
-            <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-bold uppercase tracking-wider rounded-full mb-4">
-                Quiz
+            {/* Source Badge */}
+            <span className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full mb-4 ${source === 'AI' ? 'bg-purple-100 text-purple-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                {source === 'AI' ? <Sparkles size={12}/> : <BookOpen size={12}/>}
+                {source === 'AI' ? 'AI Generated' : 'Bank Soal'}
             </span>
+            
             <h3 className="text-xl font-medium text-slate-900 leading-relaxed">
               {question.question}
             </h3>
           </div>
 
+          {/* Options */}
           <div className="p-6 md:p-8 space-y-3 bg-slate-50/50">
             {question.options.map((option, idx) => {
               let btnClass = "bg-white border-slate-200 hover:border-brand-300 hover:bg-brand-50";
               
               if (showResult) {
                 if (idx === question.correctIndex) {
-                  btnClass = "bg-green-100 border-green-300 text-green-800"; // Correct answer
+                  btnClass = "bg-green-100 border-green-300 text-green-800"; // Jawaban Benar
                 } else if (idx === selectedIdx && idx !== question.correctIndex) {
-                  btnClass = "bg-red-100 border-red-300 text-red-800"; // Wrong selection
+                  btnClass = "bg-red-100 border-red-300 text-red-800"; // Jawaban Salah User
                 } else {
-                  btnClass = "bg-slate-50 border-slate-200 opacity-60"; // Others
+                  btnClass = "bg-slate-50 border-slate-200 opacity-60"; // Opsi Lain
                 }
               } else if (idx === selectedIdx) {
-                btnClass = "bg-brand-100 border-brand-400 text-brand-800";
+                btnClass = "bg-brand-100 border-brand-400 text-brand-800"; // Terpilih (sebelum result)
               }
 
               return (
@@ -105,21 +130,31 @@ const GrammarPractice: React.FC = () => {
             })}
           </div>
 
+          {/* Explanation & Next Actions */}
           {showResult && (
-            <div className="p-6 md:p-8 bg-indigo-50 border-t border-indigo-100 animate-fade-in">
-              <div className="flex items-start gap-3 mb-4">
+            <div className="p-6 md:p-8 bg-indigo-50 border-t border-indigo-100 animate-slide-up">
+              <div className="flex items-start gap-3 mb-6">
                 <HelpCircle className="text-indigo-600 shrink-0 mt-1" size={24} />
                 <div>
                   <h4 className="font-bold text-indigo-900 mb-1">Penjelasan</h4>
                   <p className="text-indigo-800 leading-relaxed">{question.explanation}</p>
                 </div>
               </div>
-              <button 
-                onClick={fetchQuestion}
-                className="w-full py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 flex items-center justify-center gap-2 transition-colors"
-              >
-                Soal Selanjutnya <ArrowRight size={18} />
-              </button>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <button 
+                    onClick={() => fetchQuestion(false)}
+                    className="w-full py-3 bg-white border border-slate-300 text-slate-700 rounded-lg font-semibold hover:bg-slate-50 flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <BookOpen size={18} /> Soal Latihan Lain
+                  </button>
+                  <button 
+                    onClick={() => fetchQuestion(true)}
+                    className="w-full py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 flex items-center justify-center gap-2 transition-colors shadow-sm"
+                  >
+                    <Sparkles size={18} /> Buat Soal Baru AI
+                  </button>
+              </div>
             </div>
           )}
         </div>

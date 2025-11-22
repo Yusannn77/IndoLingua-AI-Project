@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
 import { AppView } from './types';
 import Layout from './components/Layout';
-import ChatTutor from './components/ChatTutor';
+// ChatTutor import dihapus
 import Translator from './components/Translator';
 import VocabBuilder from './components/VocabBuilder';
 import GrammarPractice from './components/GrammarPractice';
 import DailyChallenge from './components/DailyChallenge';
+import HistoryLog from './components/HistoryLog'; // Pastikan ini ada karena sudah dibuat sebelumnya
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
 
   const renderView = () => {
     switch (currentView) {
-      case AppView.CHAT:
-        return <ChatTutor />;
+      // Case CHAT dihapus
       case AppView.TRANSLATE:
         return <Translator />;
       case AppView.VOCAB:
@@ -22,6 +22,8 @@ const App: React.FC = () => {
         return <GrammarPractice />;
       case AppView.CHALLENGE:
         return <DailyChallenge />;
+      case AppView.HISTORY:
+        return <HistoryLog />;
       case AppView.HOME:
       default:
         return <HomeView onNavigate={setCurrentView} />;
@@ -44,22 +46,13 @@ const HomeView: React.FC<{ onNavigate: (view: AppView) => void }> = ({ onNavigat
           <span className="text-brand-500">Tanpa Takut Salah</span>
         </h1>
         <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-          IndoLingua.ai adalah teman belajarmu. Percakapan santai, penjelasan dalam Bahasa Indonesia, dan materi yang relevan dengan keseharianmu.
+          IndoLingua.ai adalah teman belajarmu. Fokus pada latihan Grammar, Vocabulary, dan percakapan sehari-hari yang relevan.
         </p>
       </div>
 
+      {/* Grid Card Menu Utama */}
       <div className="grid md:grid-cols-2 gap-4 w-full max-w-2xl">
-        <div 
-            onClick={() => onNavigate(AppView.CHAT)}
-            className="group p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:border-brand-300 cursor-pointer transition-all text-left"
-        >
-            <div className="w-12 h-12 bg-brand-100 text-brand-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
-            </div>
-            <h3 className="text-lg font-bold text-slate-900">Chat dengan Tutor</h3>
-            <p className="text-slate-500 text-sm mt-1">Latihan ngobrol santai atau role-play situasi tertentu.</p>
-        </div>
-
+        {/* Card 1: Translator diganti ke posisi utama */}
         <div 
             onClick={() => onNavigate(AppView.TRANSLATE)}
             className="group p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:border-accent-300 cursor-pointer transition-all text-left"
@@ -69,6 +62,18 @@ const HomeView: React.FC<{ onNavigate: (view: AppView) => void }> = ({ onNavigat
             </div>
             <h3 className="text-lg font-bold text-slate-900">Terjemah & Paham</h3>
             <p className="text-slate-500 text-sm mt-1">Bukan sekadar translate, tapi paham 'kenapa' grammar-nya begitu.</p>
+        </div>
+
+        {/* Card 2: Daily Challenge */}
+        <div 
+            onClick={() => onNavigate(AppView.CHALLENGE)}
+            className="group p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:border-brand-300 cursor-pointer transition-all text-left"
+        >
+            <div className="w-12 h-12 bg-brand-100 text-brand-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+            </div>
+            <h3 className="text-lg font-bold text-slate-900">Tantangan Harian</h3>
+            <p className="text-slate-500 text-sm mt-1">Asah skill percakapanmu dengan skenario dunia nyata.</p>
         </div>
       </div>
       

@@ -66,6 +66,7 @@ export interface DailyProgress {
   targets: string[]; // 10 kata target
   memorized: string[]; // Kata yang sudah di-checklist
   completed: string[]; // Kata yang sudah lulus survival
+  meanings: Record<string, string>;
 }
 
 export interface SurvivalScenario {

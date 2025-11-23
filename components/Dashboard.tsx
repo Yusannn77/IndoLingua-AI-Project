@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { GeminiService } from '../services/geminiService';
 import { HistoryItem, SavedVocab } from '../types';
-import { Trophy, Zap, Brain, TrendingUp, Activity, Calendar } from 'lucide-react';
+import { Trophy, Zap, Brain, Activity, Calendar } from 'lucide-react';
 
 const VOCAB_STORAGE_KEY = 'indolingua_vocab_v1';
-
 const DAILY_STORAGE_KEY = 'indolingua_daily_v1';
 
 const Dashboard: React.FC = () => {
@@ -12,7 +11,7 @@ const Dashboard: React.FC = () => {
     challengesCompleted: 0,
     masteredVocab: 0,
     monthlyTokens: 0,
-    streak: 0 // Optional fun stat
+    streak: 0 
   });
 
   const [recentActivity, setRecentActivity] = useState<HistoryItem[]>([]);
@@ -22,31 +21,21 @@ const Dashboard: React.FC = () => {
   }, []);
 
   const loadStats = () => {
-    // 1. Load History
+    // 1. Load History (Hanya untuk list aktivitas terbaru)
     const history = GeminiService.getHistory();
-    setRecentActivity(history.slice(0, 5)); // Top 5 recent
+    setRecentActivity(history.slice(0, 5));
 
-    // 2. Calculate Tokens (Current Month)
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const tokens = history.reduce((acc, item) => {
-      const date = new Date(item.timestamp);
-      if (date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
-        return acc + (item.tokens || 0);
-      }
-      return acc;
-    }, 0);
+    // 2. Calculate Tokens (FIXED: Ambil dari Permanent Storage)
+    // Sebelumnya kita hitung dari history array yang terbatas 50 item, itu salah.
+    // Sekarang kita ambil total akumulatif dari Service.
+    const tokens = GeminiService.getTotalTokens();
 
     // 3. Calculate Daily Challenges
-    // We read from 'indolingua_daily_v1' to get the ACTUAL completed count for today
     let challenges = 0;
     try {
       const dailyJson = localStorage.getItem(DAILY_STORAGE_KEY);
       if (dailyJson) {
         const dailyData = JSON.parse(dailyJson);
-        // We count how many "Survival Mode" tasks are completed in the current daily session
         if (dailyData.completed) {
              challenges = dailyData.completed.length;
         }
@@ -75,17 +64,12 @@ const Dashboard: React.FC = () => {
     });
   };
 
-  // Simple streak logic (consecutive days with activity)
   const calculateStreak = (history: HistoryItem[]) => {
     if (history.length === 0) return 0;
-    
     const uniqueDays = new Set(
       history.map(h => new Date(h.timestamp).toDateString())
     );
     return uniqueDays.size; 
-    // Note: Real streak logic requires checking consecutive days, 
-    // but for a simple dashboard, total active days is a good start or simple count.
-    // Let's stick to just unique days active for now to be safe.
   };
 
   return (

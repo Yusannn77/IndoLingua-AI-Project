@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Schema } from "@google/genai";
 import {
   TranslationResult,
   VocabResult,
@@ -9,401 +9,238 @@ import {
   SurvivalScenario
 } from "../types";
 
-// --- CONFIGURATION & CONSTANTS ---
 const CONFIG = {
   API_KEY: process.env.API_KEY || '',
-  MODEL_NAME: 'gemini-2.5-flash-lite',
+  MODEL_NAME: 'gemini-2.5-flash-lite', 
   HISTORY_KEY: 'indolingua_history_v1',
-  CACHE_DURATION_MS: 60 * 60 * 1000, // 1 hour
+  TOKEN_KEY: 'indolingua_token_usage_v1',
+  CACHE_DURATION_MS: 3600000, 
   MAX_HISTORY_ITEMS: 50,
-  RETRY: {
-    COUNT: 3,
-    DELAY_MS: 2000,
+  MAX_RETRIES: 3,
+};
+
+// --- INFRASTRUCTURE ---
+
+class LocalStore<T> {
+  constructor(private key: string) {}
+  get(): T[] {
+    if (typeof window === 'undefined') return [];
+    try {
+      const item = localStorage.getItem(this.key);
+      return item ? JSON.parse(item) : [];
+    } catch { return []; }
+  }
+  save(data: T[]) {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(this.key, JSON.stringify(data));
+  }
+}
+
+const historyStore = new LocalStore<HistoryItem>(CONFIG.HISTORY_KEY);
+const cacheStore = new Map<string, { data: any; timestamp: number }>();
+
+const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
+
+const logHistory = (feature: string, details: string, source: 'API' | 'CACHE', tokens = 0) => {
+  const history = historyStore.get();
+  const newItem: HistoryItem = {
+    id: generateId(),
+    timestamp: new Date(),
+    feature,
+    details,
+    source,
+    tokens
+  };
+  const updated = [newItem, ...history].slice(0, CONFIG.MAX_HISTORY_ITEMS);
+  historyStore.save(updated);
+};
+
+const updateTokenUsage = (newTokens: number) => {
+  if (typeof window === 'undefined') return;
+  const now = new Date();
+  const currentPeriod = `${now.getFullYear()}-${now.getMonth()}`;
+  try {
+    const savedRaw = localStorage.getItem(CONFIG.TOKEN_KEY);
+    let saved = savedRaw ? JSON.parse(savedRaw) : { period: currentPeriod, total: 0 };
+    if (saved.period !== currentPeriod) {
+      saved = { period: currentPeriod, total: newTokens };
+    } else {
+      saved.total += newTokens;
+    }
+    localStorage.setItem(CONFIG.TOKEN_KEY, JSON.stringify(saved));
+  } catch (e) {
+    localStorage.setItem(CONFIG.TOKEN_KEY, JSON.stringify({ period: currentPeriod, total: newTokens }));
   }
 };
 
-const PROMPTS = {
-  TUTOR_INSTRUCTION: `
-You are IndoLingua, a helpful English tutor for Indonesians.
-Output JSON ONLY.
-Your goal is to provide CLEAR and HELPFUL explanations.
-For nuances and context, use natural Indonesian language that is easy to understand.
-`,
+const getMonthlyTokenUsage = (): number => {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const savedRaw = localStorage.getItem(CONFIG.TOKEN_KEY);
+    if (!savedRaw) return 0;
+    const saved = JSON.parse(savedRaw);
+    const now = new Date();
+    const currentPeriod = `${now.getFullYear()}-${now.getMonth()}`;
+    return saved.period === currentPeriod ? saved.total : 0;
+  } catch { return 0; }
 };
 
-// --- CACHE SYSTEM ---
-interface CacheEntry<T> {
-  data: T;
-  timestamp: number;
-}
+const client = new GoogleGenAI({ apiKey: CONFIG.API_KEY });
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-class CacheService {
-  private store = new Map<string, CacheEntry<any>>();
+// --- TELEMETRY & RETRY WRAPPER ---
 
-  set<T>(key: string, data: T): void {
-    this.store.set(key, { data, timestamp: Date.now() });
-  }
-
-  get<T>(key: string): T | null {
-    if (!this.store.has(key)) return null;
-    
-    const entry = this.store.get(key)!;
-    const isExpired = Date.now() - entry.timestamp > CONFIG.CACHE_DURATION_MS;
-    
-    if (isExpired) {
-      this.store.delete(key);
-      return null;
+async function executeWithTelemetry<T>(
+  featureName: string,
+  cacheKey: string | null,
+  logDetail: string,
+  apiCall: () => Promise<{ data: T; tokens: number }>
+): Promise<T> {
+  if (cacheKey && cacheStore.has(cacheKey)) {
+    const { data, timestamp } = cacheStore.get(cacheKey)!;
+    if (Date.now() - timestamp < CONFIG.CACHE_DURATION_MS) {
+      logHistory(featureName, logDetail, "CACHE");
+      return data;
     }
-    return entry.data as T;
+    cacheStore.delete(cacheKey);
   }
 
-  clean(): void {
-    const now = Date.now();
-    for (const [key, value] of this.store.entries()) {
-      if (now - value.timestamp > CONFIG.CACHE_DURATION_MS) {
-        this.store.delete(key);
-      }
-    }
-  }
-}
-
-const cacheService = new CacheService();
-
-// --- HISTORY SYSTEM ---
-class HistoryService {
-  private history: HistoryItem[] = [];
-
-  constructor() {
-    this.load();
-  }
-
-  private load() {
+  let attempt = 0;
+  while (attempt < CONFIG.MAX_RETRIES) {
     try {
-      if (typeof localStorage === 'undefined') return;
-      const saved = localStorage.getItem(CONFIG.HISTORY_KEY);
-      if (saved) {
-        this.history = JSON.parse(saved).map((item: any) => ({
-          ...item,
-          timestamp: new Date(item.timestamp)
-        }));
+      const { data, tokens } = await apiCall();
+      if (cacheKey) cacheStore.set(cacheKey, { data, timestamp: Date.now() });
+      logHistory(featureName, logDetail, "API", tokens);
+      updateTokenUsage(tokens);
+      return data;
+    } catch (error: any) {
+      const isRetryable = error?.message?.includes('503') || error?.status === 503 || error?.status === 429;
+      if (isRetryable && attempt < CONFIG.MAX_RETRIES - 1) {
+        attempt++;
+        await delay(attempt * 1500);
+        continue;
       }
-    } catch (error) {
-      console.error("Failed to load history:", error);
-      this.history = [];
+      console.error(`Gemini API Error [${featureName}]:`, error);
+      throw error;
     }
   }
-
-  private save() {
-    try {
-      if (typeof localStorage === 'undefined') return;
-      localStorage.setItem(CONFIG.HISTORY_KEY, JSON.stringify(this.history));
-    } catch (e) {
-      console.warn("Failed to save history:", e);
-    }
-  }
-
-  add(feature: string, details: string, source: 'API' | 'CACHE', tokens: number = 0) {
-    const newItem: HistoryItem = {
-      id: Date.now().toString() + Math.random().toString().slice(2, 5),
-      timestamp: new Date(),
-      feature,
-      details,
-      source,
-      tokens
-    };
-    
-    this.history.push(newItem);
-    if (this.history.length > CONFIG.MAX_HISTORY_ITEMS) {
-      this.history.shift();
-    }
-    this.save();
-  }
-
-  getAll(): HistoryItem[] {
-    return this.history;
-  }
-
-  clear() {
-    this.history = [];
-    try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem(CONFIG.HISTORY_KEY);
-      }
-    } catch (e) {
-      console.warn("Failed to clear history:", e);
-    }
-  }
+  throw new Error("Request failed after max retries");
 }
 
-const historyService = new HistoryService();
-
-// --- API CLIENT ---
-interface ApiResult<T> {
-  data: T;
-  tokens: number;
-}
-
-class GeminiClient {
-  private client: GoogleGenAI;
-
-  constructor(apiKey: string) {
-    this.client = new GoogleGenAI({ apiKey });
-  }
-
-  private async callWithRetry<T>(apiCall: () => Promise<T>): Promise<T> {
-    let delay = CONFIG.RETRY.DELAY_MS;
-    for (let i = 0; i < CONFIG.RETRY.COUNT; i++) {
-      try {
-        return await apiCall();
-      } catch (error: any) {
-        const isRateLimit = error?.response?.status === 429 || error?.status === 429;
-        if (isRateLimit && i < CONFIG.RETRY.COUNT - 1) {
-          await new Promise(resolve => setTimeout(resolve, delay));
-          delay *= 2;
-        } else {
-          throw error;
-        }
-      }
+async function generateJson<T>(prompt: string, responseSchema: any): Promise<{ data: T; tokens: number }> {
+  const response = await client.models.generateContent({
+    model: CONFIG.MODEL_NAME,
+    contents: prompt,
+    config: {
+      systemInstruction: "You are IndoLingua. Output valid JSON only.",
+      responseMimeType: "application/json",
+      responseSchema: responseSchema as Schema
     }
-    throw new Error("API request failed after max retries");
-  }
-
-  async generateJson<T>(prompt: string, schemaProperties: any, requiredFields: string[]): Promise<ApiResult<T>> {
-    return this.callWithRetry(async () => {
-      const response = await this.client.models.generateContent({
-        model: CONFIG.MODEL_NAME,
-        contents: prompt,
-        config: {
-          systemInstruction: PROMPTS.TUTOR_INSTRUCTION,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: schemaProperties,
-            required: requiredFields
-          } as any // Cast to any if type definitions are strict
-        }
-      });
-
-      return {
-        data: JSON.parse(response.text || "{}"),
-        tokens: response.usageMetadata?.totalTokenCount || 0
-      };
-    });
-  }
-
-  async generateText(prompt: string, maxTokens = 50): Promise<ApiResult<string>> {
-    return this.callWithRetry(async () => {
-      const response = await this.client.models.generateContent({
-        model: CONFIG.MODEL_NAME,
-        contents: prompt,
-        config: {
-          responseMimeType: "text/plain",
-          maxOutputTokens: maxTokens,
-          temperature: 0.1
-        }
-      });
-
-      const text = response.text?.trim().replace(/^["']|["']$|\.$/g, '') || "Tidak ditemukan";
-      return {
-        data: text,
-        tokens: response.usageMetadata?.totalTokenCount || 0
-      };
-    });
-  }
+  });
+  return {
+    data: JSON.parse(response.text || "{}"),
+    tokens: response.usageMetadata?.totalTokenCount || 0
+  };
 }
 
-const apiClient = new GeminiClient(CONFIG.API_KEY);
-
-// --- MAIN SERVICE EXPORT ---
+// --- EXPORTED SERVICE ---
 
 export const GeminiService = {
-  getHistory: () => historyService.getAll(),
-  clearHistory: () => historyService.clear(),
+  getHistory: () => historyStore.get().map(h => ({ ...h, timestamp: new Date(h.timestamp) })),
+  getTotalTokens: () => getMonthlyTokenUsage(),
+  clearHistory: () => localStorage.removeItem(CONFIG.HISTORY_KEY),
 
-  // 1. Translate & Explain
-  translateAndExplain: async (text: string): Promise<TranslationResult> => {
-    const key = `trans:${text.trim().toLowerCase()}`;
-    
-    // Check cache
-    const cached = cacheService.get<TranslationResult>(key);
-    if (cached) {
-      historyService.add("Translator", `Menerjemahkan: "${text.substring(0, 20)}..."`, "CACHE");
-      return cached;
-    }
+  translateAndExplain: (text: string) => 
+    executeWithTelemetry<TranslationResult>("Translator", `trans:${text.trim().toLowerCase()}`, `Menerjemahkan: "${text.substring(0, 20)}..."`, 
+      () => generateJson(`Translate "${text}"...`, { type: Type.OBJECT, properties: { translation: { type: Type.STRING }, explanation: { type: Type.STRING }, variations: { type: Type.ARRAY, items: { type: Type.STRING } } }, required: ["translation", "explanation", "variations"] })),
 
-    // Call API
-    const prompt = `Translate to English naturally. Explain the grammar structure clearly in Indonesian (why is it translated this way?). Give 3 natural sentence variations. Input: "${text}"`;
-    const schema = {
-      translation: { type: Type.STRING },
-      explanation: { type: Type.STRING },
-      variations: { type: Type.ARRAY, items: { type: Type.STRING } }
-    };
+  explainVocab: (word: string) => 
+    executeWithTelemetry<VocabResult>("Vocab Builder", `vocab:${word.trim().toLowerCase()}`, `Mencari kata: "${word}"`, 
+      () => generateJson(
+        `Role: Indonesian English Teacher. Task: Explain "${word}".
+         REQUIRED JSON OUTPUT:
+         {
+           "word": "${word}",
+           "meaning": "Definisi singkat padat dalam Bahasa Indonesia.",
+           "context_usage": "English sentence. (Terjemahan Indonesia)",
+           "nuance_comparison": "Jelaskan nuansa dalam Bahasa Indonesia.",
+           "synonyms": ["synonym1", "synonym2"]
+         }`,
+        { 
+          type: Type.OBJECT, 
+          properties: { 
+            word: { type: Type.STRING }, 
+            meaning: { type: Type.STRING }, 
+            context_usage: { type: Type.STRING }, 
+            nuance_comparison: { type: Type.STRING }, 
+            synonyms: { type: Type.ARRAY, items: { type: Type.STRING } } 
+          }, 
+          required: ["word", "meaning", "context_usage", "nuance_comparison", "synonyms"] 
+        }
+      )
+    ),
 
-    const result = await apiClient.generateJson<TranslationResult>(prompt, schema, ["translation", "explanation", "variations"]);
-    
-    // Update state
-    cacheService.set(key, result.data);
-    historyService.add("Translator", `Menerjemahkan: "${text.substring(0, 20)}..."`, "API", result.tokens);
-    
-    return result.data;
-  },
+  generateGrammarQuestion: (level: 'beginner' | 'intermediate') =>
+    executeWithTelemetry<GrammarQuestion>("Grammar Practice", null, `Generate soal ${level}`, 
+      () => generateJson(`Generate grammar question...`, { type: Type.OBJECT, properties: { id: { type: Type.STRING }, question: { type: Type.STRING }, options: { type: Type.ARRAY, items: { type: Type.STRING } }, correctIndex: { type: Type.INTEGER }, explanation: { type: Type.STRING } }, required: ["question", "options", "correctIndex", "explanation"] })),
 
-  // 2. Vocab Builder
-  explainVocab: async (word: string): Promise<VocabResult> => {
-    const key = `vocab:${word.trim().toLowerCase()}`;
+  evaluateChallengeResponse: (scenario: string, phrase: string, user: string) =>
+    executeWithTelemetry<ChallengeFeedback>("Daily Challenge", null, "Evaluasi Challenge", 
+      () => generateJson(`Evaluate "${user}" vs "${phrase}"...`, { type: Type.OBJECT, properties: { score: { type: Type.NUMBER }, feedback: { type: Type.STRING }, improved_response: { type: Type.STRING } }, required: ["score", "feedback", "improved_response"] })),
 
-    const cached = cacheService.get<VocabResult>(key);
-    if (cached) {
-      historyService.add("Vocab Builder", `Mencari kata: "${word}"`, "CACHE");
-      return cached;
-    }
+  generateStorySentence: () =>
+    executeWithTelemetry<StoryScenario>("Story Lab", null, "Generate Story", 
+      () => generateJson(`Generate sentence...`, { type: Type.OBJECT, properties: { sentence: { type: Type.STRING }, translation: { type: Type.STRING } }, required: ["sentence", "translation"] })),
 
-    const prompt = `Explain the word "${word}" for an Indonesian learner.
-        1. Meaning: In Indonesian.
-        2. Context Usage: A full, natural English sentence examples with its Indonesian translation.
-        3. Nuance: Explain in Indonesian how this word differs from its synonyms or when to use it properly (give a solid explanation).
-        4. Synonyms: List 3 synonyms.`;
-    
-    const schema = {
-      word: { type: Type.STRING },
-      meaning: { type: Type.STRING },
-      context_usage: { type: Type.STRING },
-      nuance_comparison: { type: Type.STRING },
-      synonyms: { type: Type.ARRAY, items: { type: Type.STRING } }
-    };
+  evaluateStoryTranslation: (orig: string, user: string) =>
+    executeWithTelemetry<ChallengeFeedback>("Story Lab", null, "Evaluasi Terjemahan", 
+      () => generateJson(`Evaluate translation...`, { type: Type.OBJECT, properties: { score: { type: Type.NUMBER }, feedback: { type: Type.STRING }, improved_response: { type: Type.STRING } }, required: ["score", "feedback", "improved_response"] })),
 
-    const result = await apiClient.generateJson<VocabResult>(prompt, schema, ["word", "meaning", "context_usage", "nuance_comparison", "synonyms"]);
+  generateSurvivalScenario: (word: string) =>
+    executeWithTelemetry<SurvivalScenario>("Survival Mode", null, `Misi: ${word}`, 
+      () => generateJson(`Create scenario for "${word}"...`, { type: Type.OBJECT, properties: { word: { type: Type.STRING }, situation: { type: Type.STRING } }, required: ["word", "situation"] })),
 
-    cacheService.set(key, result.data);
-    historyService.add("Vocab Builder", `Mencari kata: "${word}"`, "API", result.tokens);
+  // --- FIXED: FAIR & HELPFUL GRADING ---
+  evaluateSurvivalResponse: (sit: string, word: string, res: string) =>
+    executeWithTelemetry<ChallengeFeedback>("Survival Mode", null, "Evaluasi Misi", 
+      () => generateJson(
+        `Role: Friendly English Tutor.
+         Context: A student is practicing English in a scenario.
+         Scenario: "${sit}"
+         Target Word to Use: "${word}"
+         Student Answer: "${res}"
 
-    return result.data;
-  },
+         GRADING RULES:
+         1. IF the student uses the word "${word}" correctly AND the sentence makes sense in context -> Give Score 7-10.
+         2. IF the grammar is slightly wrong but understandable -> Give Score 6-8.
+         3. ONLY give low score (<5) if the answer is irrelevant or missing the target word.
+         
+         OUTPUT FORMAT (JSON):
+         - "score": (Integer 1-10)
+         - "feedback": (Bahasa Indonesia) Explain friendly why it's good or how to improve. Don't be too formal.
+         - "improved_response": (English) A perfect, natural sentence example for this scenario using the word.`,
+        { 
+          type: Type.OBJECT, 
+          properties: { 
+            score: { type: Type.INTEGER }, // Force Integer to avoid 0.7
+            feedback: { type: Type.STRING }, 
+            improved_response: { type: Type.STRING } 
+          }, 
+          required: ["score", "feedback", "improved_response"] 
+        }
+      )
+    ),
 
-  // 3. Grammar Practice
-  generateGrammarQuestion: async (level: 'beginner' | 'intermediate'): Promise<GrammarQuestion> => {
-    const prompt = `Generate 1 multiple choice grammar question (${level}) relevant for Indonesians. Provide a helpful explanation in Indonesian why the answer is correct.`;
-    const schema = {
-      id: { type: Type.STRING },
-      question: { type: Type.STRING },
-      options: { type: Type.ARRAY, items: { type: Type.STRING } },
-      correctIndex: { type: Type.INTEGER },
-      explanation: { type: Type.STRING }
-    };
-
-    const result = await apiClient.generateJson<GrammarQuestion>(prompt, schema, ["question", "options", "correctIndex", "explanation"]);
-    
-    historyService.add("Grammar Practice", `Generate soal level ${level}`, "API", result.tokens);
-    return result.data;
-  },
-
-  // 4. Daily Challenge Evaluation
-  evaluateChallengeResponse: async (scenario: string, englishPhrase: string, userTranslation: string): Promise<ChallengeFeedback> => {
-    const prompt = `Evaluate accuracy. Target: "${englishPhrase}". User: "${userTranslation}".
-        Output JSON: score (1-10), feedback (Indonesian), improved_response (Indonesian).`;
-    const schema = {
-      score: { type: Type.NUMBER },
-      feedback: { type: Type.STRING },
-      improved_response: { type: Type.STRING }
-    };
-
-    const result = await apiClient.generateJson<ChallengeFeedback>(prompt, schema, ["score", "feedback", "improved_response"]);
-    
-    historyService.add("Daily Challenge", "Evaluasi jawaban user", "API", result.tokens);
-    return result.data;
-  },
-
-  // 5. Story Lab - Generate Sentence
-  generateStorySentence: async (): Promise<StoryScenario> => {
-    const prompt = `Generate 1 short, evocative English sentence usually found in novels, anime subtitles, or slice-of-life comics. 
-        It should describe a feeling, a scenery, or a character action.
-        Example: "She smiled, as if remembering something from a distant past."
-        Output JSON: { "sentence": "...", "translation": "Terjemahan Indonesia yang puitis/natural" }`;
-    const schema = {
-      sentence: { type: Type.STRING },
-      translation: { type: Type.STRING }
-    };
-
-    const result = await apiClient.generateJson<StoryScenario>(prompt, schema, ["sentence", "translation"]);
-    
-    historyService.add("Story Lab", "Generate Kalimat Cerita", "API", result.tokens);
-    return result.data;
-  },
-
-  // 6. Evaluate Translation - Story Mode
-  evaluateStoryTranslation: async (original: string, userTranslate: string): Promise<ChallengeFeedback> => {
-    const prompt = `Context: Translating a novel/anime line.
-        Original English: "${original}"
-        User Indonesian Translation: "${userTranslate}"
-        
-        Evaluate accuracy and nuance. 
-        Output JSON: 
-        - score (1-10)
-        - feedback (in Indonesian)
-        - improved_response (The ideal INDONESIAN translation).`;
-    
-    const schema = {
-      score: { type: Type.NUMBER },
-      feedback: { type: Type.STRING },
-      improved_response: { type: Type.STRING }
-    };
-
-    const result = await apiClient.generateJson<ChallengeFeedback>(prompt, schema, ["score", "feedback", "improved_response"]);
-    
-    historyService.add("Story Lab", "Evaluasi Terjemahan", "API", result.tokens);
-    return result.data;
-  },
-
-  // 7. Get Word Definition (TEXT MODE)
-  getWordDefinition: async (word: string, contextSentence: string): Promise<string> => {
-    const prompt = `Translate english word "${word}" to Indonesian.
-        Context: "${contextSentence}"
-        Output ONLY the Indonesian meaning.`;
-    
-    const result = await apiClient.generateText(prompt);
-    
-    historyService.add("Smart Dictionary", `Menerjemahkan: ${word}`, "API", result.tokens);
-    return result.data;
-  },
-
-  // 8. Survival Mode - Generate Scenario
-  generateSurvivalScenario: async (targetWord: string): Promise<SurvivalScenario> => {
-    const prompt = `Create a short, urgent "Survival Situation" where the user MUST use the word "${targetWord}" to solve it.
-        Context: Daily Life / Travel / Work.
-        Example if word is "Negotiate": "You are in a taxi in Bali and the driver asks for too much money."
-        Output JSON: { "word": "${targetWord}", "situation": "..." }`;
-    
-    const schema = {
-      word: { type: Type.STRING },
-      situation: { type: Type.STRING }
-    };
-
-    const result = await apiClient.generateJson<SurvivalScenario>(prompt, schema, ["word", "situation"]);
-    
-    historyService.add("Survival Mode", `Misi kata: ${targetWord}`, "API", result.tokens);
-    return result.data;
-  },
-
-  // 9. Survival Mode - Evaluate Response
-  evaluateSurvivalResponse: async (situation: string, targetWord: string, userResponse: string): Promise<ChallengeFeedback> => {
-    const prompt = `Role: Strict Language Examiner.
-        Situation: ${situation}
-        Required Word: "${targetWord}"
-        User Response: "${userResponse}"
-        
-        Task: Evaluate if the user used the word "${targetWord}" correctly AND appropriately for the situation in ENGLISH.
-        
-        Output JSON: { score (1-10), feedback (Indonesian), improved_response (Better ENGLISH response) }`;
-    
-    const schema = {
-      score: { type: Type.NUMBER },
-      feedback: { type: Type.STRING },
-      improved_response: { type: Type.STRING }
-    };
-
-    const result = await apiClient.generateJson<ChallengeFeedback>(prompt, schema, ["score", "feedback", "improved_response"]);
-    
-    historyService.add("Survival Mode", "Evaluasi Misi", "API", result.tokens);
-    return result.data;
-  }
+  getWordDefinition: (word: string, context: string) =>
+    executeWithTelemetry<string>("Smart Dictionary", `def:${word}:${context.substring(0,10)}`, `Definisi: ${word}`, async () => {
+        const res = await client.models.generateContent({ 
+            model: CONFIG.MODEL_NAME, 
+            contents: `
+              Task: Translate the word "${word}" into Indonesian.
+              Context: "${context}"
+              RULES: Translate ONLY the word. Do NOT include surrounding words. Output ONLY the Indonesian word.
+            ` 
+        });
+        return { data: res.text?.trim() || "", tokens: res.usageMetadata?.totalTokenCount || 0 };
+    }),
 };

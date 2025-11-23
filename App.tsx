@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AppView } from './types';
 import Layout from './components/Layout';
 // ChatTutor import dihapus
-import Translator from './components/Translator';
+import Dashboard from './components/Dashboard';
 import VocabBuilder from './components/VocabBuilder';
 import GrammarPractice from './components/GrammarPractice';
 import DailyChallenge from './components/DailyChallenge';
@@ -15,8 +15,8 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (currentView) {
       // Case CHAT dihapus
-      case AppView.TRANSLATE:
-        return <Translator />;
+      case AppView.DASHBOARD:
+        return <Dashboard />;
       case AppView.VOCAB:
         return <VocabBuilder />;
       case AppView.GRAMMAR:
@@ -55,16 +55,16 @@ const HomeView: React.FC<{ onNavigate: (view: AppView) => void }> = ({ onNavigat
 
       {/* Grid Card Menu Utama */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 w-full px-4">
-        {/* Card 1: Translator */}
+        {/* Card 1: Dashboard */}
         <div 
-            onClick={() => onNavigate(AppView.TRANSLATE)}
-            className="group p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:border-accent-300 cursor-pointer transition-all text-left"
+            onClick={() => onNavigate(AppView.DASHBOARD)}
+            className="group p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:border-blue-300 cursor-pointer transition-all text-left"
         >
-            <div className="w-12 h-12 bg-accent-100 text-accent-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+            <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1" /><rect width="7" height="5" x="14" y="3" rx="1" /><rect width="7" height="9" x="14" y="12" rx="1" /><rect width="7" height="5" x="3" y="16" rx="1" /></svg>
             </div>
-            <h3 className="text-lg font-bold text-slate-900">Terjemah & Paham</h3>
-            <p className="text-slate-500 text-sm mt-1">Bukan sekadar translate, tapi paham 'kenapa' grammar-nya begitu.</p>
+            <h3 className="text-lg font-bold text-slate-900">Dashboard</h3>
+            <p className="text-slate-500 text-sm mt-1">Pantau statistik belajar, hafalan kata, dan penggunaan tokenmu.</p>
         </div>
 
         {/* Card 2: Story Lab (BARU) */}

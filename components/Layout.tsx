@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AppView } from '../types';
-import { Languages, BookOpen, CheckSquare, Trophy, Menu, X, GraduationCap, History as HistoryIcon, Sparkles } from 'lucide-react';
+import { Languages, BookOpen, CheckSquare, Trophy, Menu, X, GraduationCap, History as HistoryIcon, Sparkles, LayoutDashboard } from 'lucide-react';
 
 interface LayoutProps {
   currentView: AppView;
@@ -12,7 +12,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, children }) =>
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
-    { view: AppView.TRANSLATE, label: 'Terjemah & Jelaskan', icon: Languages },
+    { view: AppView.DASHBOARD, label: 'Dashboard', icon: LayoutDashboard },
     { view: AppView.VOCAB, label: 'Kamus Kontekstual', icon: BookOpen },
     { view: AppView.STORY_LAB, label: 'Story Lab', icon: Sparkles }, // <--- INI BARU
     { view: AppView.GRAMMAR, label: 'Latihan Grammar', icon: CheckSquare },

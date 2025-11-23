@@ -1,10 +1,11 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { TranslationResult, VocabResult, GrammarQuestion, ChallengeFeedback, HistoryItem } from "../types";
+import { TranslationResult, VocabResult, GrammarQuestion, ChallengeFeedback, HistoryItem, StoryScenario, SurvivalScenario } from "../types";
 
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
-const MODEL_NAME = 'gemini-2.5-flash';
+// Gunakan versi Lite yang terbukti sukses dan irit
+const MODEL_NAME = 'gemini-2.5-flash-lite';
 const HISTORY_STORAGE_KEY = 'indolingua_history_v1';
 
 // --- STORAGE ---
@@ -14,22 +15,15 @@ const cache = {
 };
 
 // Cache expiration time (1 hour)
-const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+const CACHE_DURATION = 60 * 60 * 1000; 
 
-// Function to clean expired cache entries
 function cleanExpiredCache() {
   const now = Date.now();
-  // Clean vocab cache
   for (const [key, value] of cache.vocab.entries()) {
-    if (now - value.timestamp > CACHE_DURATION) {
-      cache.vocab.delete(key);
-    }
+    if (now - value.timestamp > CACHE_DURATION) cache.vocab.delete(key);
   }
-  // Clean translation cache
   for (const [key, value] of cache.translation.entries()) {
-    if (now - value.timestamp > CACHE_DURATION) {
-      cache.translation.delete(key);
-    }
+    if (now - value.timestamp > CACHE_DURATION) cache.translation.delete(key);
   }
 }
 
@@ -37,7 +31,6 @@ function cleanExpiredCache() {
 let requestHistory: HistoryItem[] = [];
 
 try {
-  // Cek dulu apakah localStorage tersedia
   if (typeof Storage !== 'undefined' && localStorage) {
     const saved = localStorage.getItem(HISTORY_STORAGE_KEY);
     if (saved) {
@@ -66,12 +59,10 @@ const addToHistory = (feature: string, details: string, source: 'API' | 'CACHE',
   try {
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(requestHistory));
   } catch (e) {
-    // Jika localStorage penuh atau error, abaikan saja, tidak perlu crash aplikasi
     console.warn("Tidak bisa menyimpan ke localStorage:", e);
   }
 };
 
-// --- BALANCED SYSTEM INSTRUCTION ---
 const TUTOR_INSTRUCTION = `
 You are IndoLingua, a helpful English tutor for Indonesians.
 Output JSON ONLY.
@@ -108,21 +99,17 @@ export const GeminiService = {
     }
   },
 
-  // FUNGSI CHAT DIHAPUS
-
-  // 2. Translate & Explain (BALANCED)
+  // 1. Translate & Explain
   translateAndExplain: async (text: string): Promise<TranslationResult> => {
     const key = text.trim().toLowerCase();
-    cleanExpiredCache(); // Clean expired entries before checking cache
+    cleanExpiredCache();
 
     if (cache.translation.has(key)) {
       const cachedValue = cache.translation.get(key)!;
-      // Check if cache entry is still valid
       if (Date.now() - cachedValue.timestamp <= CACHE_DURATION) {
         addToHistory("Translator", `Menerjemahkan: "${text.substring(0, 20)}..."`, "CACHE", 0);
         return cachedValue.data;
       } else {
-        // Remove expired entry
         cache.translation.delete(key);
       }
     }
@@ -157,19 +144,17 @@ export const GeminiService = {
     return result;
   },
 
-  // 3. Vocab Builder (QUALITY RESTORED)
+  // 2. Vocab Builder
   explainVocab: async (word: string): Promise<VocabResult> => {
     const key = word.trim().toLowerCase();
-    cleanExpiredCache(); // Clean expired entries before checking cache
+    cleanExpiredCache();
 
     if (cache.vocab.has(key)) {
       const cachedValue = cache.vocab.get(key)!;
-      // Check if cache entry is still valid
       if (Date.now() - cachedValue.timestamp <= CACHE_DURATION) {
         addToHistory("Vocab Builder", `Mencari kata: "${word}"`, "CACHE", 0);
         return cachedValue.data;
       } else {
-        // Remove expired entry
         cache.vocab.delete(key);
       }
     }
@@ -210,7 +195,7 @@ export const GeminiService = {
     return result;
   },
 
-  // 4. Grammar Practice
+  // 3. Grammar Practice
   generateGrammarQuestion: async (level: 'beginner' | 'intermediate'): Promise<GrammarQuestion> => {
     const wrapper = await callWithRetry(async () => {
       const response = await ai.models.generateContent({
@@ -242,15 +227,13 @@ export const GeminiService = {
     return wrapper.data;
   },
 
-  // 5. Daily Challenge Evaluation
+  // 4. Daily Challenge Evaluation (LEGACY - Tetap disimpan agar tidak error, meski sudah diganti Survival Mode)
   evaluateChallengeResponse: async (scenario: string, englishPhrase: string, userTranslation: string): Promise<ChallengeFeedback> => {
     const wrapper = await callWithRetry(async () => {
       const response = await ai.models.generateContent({
         model: MODEL_NAME,
-        contents: `Evaluate this translation. Context: ${scenario}. Target: ${englishPhrase}. User: ${userTranslation}.
-        Give a score (1-10).
-        Feedback: Explain in Indonesian where the user can improve (grammar/vocab).
-        Improved Response: The most natural way to say it in Indonesian.`,
+        contents: `Evaluate accuracy. Target: "${englishPhrase}". User: "${userTranslation}".
+        Output JSON: score (1-10), feedback (Indonesian), improved_response (Indonesian).`,
         config: {
           systemInstruction: TUTOR_INSTRUCTION,
           responseMimeType: "application/json",
@@ -270,8 +253,165 @@ export const GeminiService = {
         tokens: response.usageMetadata?.totalTokenCount || 0
       };
     });
-
     addToHistory("Daily Challenge", "Evaluasi jawaban user", "API", wrapper.tokens);
+    return wrapper.data;
+  },
+
+  // 5. Story Lab - Generate Sentence
+  generateStorySentence: async (): Promise<StoryScenario> => {
+    const wrapper = await callWithRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: `Generate 1 short, evocative English sentence usually found in novels, anime subtitles, or slice-of-life comics. 
+        It should describe a feeling, a scenery, or a character action.
+        Example: "She smiled, as if remembering something from a distant past."
+        Output JSON: { "sentence": "...", "translation": "Terjemahan Indonesia yang puitis/natural" }`,
+        config: {
+          systemInstruction: TUTOR_INSTRUCTION,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              sentence: { type: Type.STRING },
+              translation: { type: Type.STRING }
+            },
+            required: ["sentence", "translation"]
+          }
+        }
+      });
+      return {
+        data: JSON.parse(response.text || "{}"),
+        tokens: response.usageMetadata?.totalTokenCount || 0
+      };
+    });
+    
+    addToHistory("Story Lab", "Generate Kalimat Cerita", "API", wrapper.tokens);
+    return wrapper.data;
+  },
+
+  // 6. Evaluate Translation - Story Mode
+  evaluateStoryTranslation: async (original: string, userTranslate: string): Promise<ChallengeFeedback> => {
+    const wrapper = await callWithRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: `Context: Translating a novel/anime line.
+        Original English: "${original}"
+        User Indonesian Translation: "${userTranslate}"
+        
+        Evaluate accuracy and nuance. 
+        Output JSON: 
+        - score (1-10)
+        - feedback (in Indonesian)
+        - improved_response (The ideal INDONESIAN translation).`,
+        config: {
+            systemInstruction: TUTOR_INSTRUCTION,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                score: { type: Type.NUMBER },
+                feedback: { type: Type.STRING },
+                improved_response: { type: Type.STRING }
+              },
+              required: ["score", "feedback", "improved_response"]
+            }
+        }
+      });
+      return { data: JSON.parse(response.text || "{}"), tokens: response.usageMetadata?.totalTokenCount || 0 };
+    });
+    addToHistory("Story Lab", "Evaluasi Terjemahan", "API", wrapper.tokens);
+    return wrapper.data;
+  },
+
+  // 7. Get Word Definition (TEXT MODE - STABLE)
+  getWordDefinition: async (word: string, contextSentence: string): Promise<string> => {
+    const wrapper = await callWithRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: `Translate english word "${word}" to Indonesian.
+        Context: "${contextSentence}"
+        Output ONLY the Indonesian meaning.`,
+        config: {
+          responseMimeType: "text/plain", 
+          maxOutputTokens: 50, 
+          temperature: 0.1 
+        }
+      });
+      
+      const cleanText = response.text?.trim().replace(/^["']|["']$|\.$/g, '') || "Tidak ditemukan";
+      
+      return {
+        text: cleanText,
+        tokens: response.usageMetadata?.totalTokenCount || 0
+      };
+    });
+    
+    addToHistory("Smart Dictionary", `Menerjemahkan: ${word}`, "API", wrapper.tokens);
+    return wrapper.text;
+  },
+
+  // 8. Survival Mode - Generate Scenario
+  generateSurvivalScenario: async (targetWord: string): Promise<SurvivalScenario> => {
+    const wrapper = await callWithRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: `Create a short, urgent "Survival Situation" where the user MUST use the word "${targetWord}" to solve it.
+        Context: Daily Life / Travel / Work.
+        Example if word is "Negotiate": "You are in a taxi in Bali and the driver asks for too much money."
+        Output JSON: { "word": "${targetWord}", "situation": "..." }`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              word: { type: Type.STRING },
+              situation: { type: Type.STRING }
+            },
+            required: ["word", "situation"]
+          }
+        }
+      });
+      return {
+        data: JSON.parse(response.text || "{}"),
+        tokens: response.usageMetadata?.totalTokenCount || 0
+      };
+    });
+    
+    addToHistory("Survival Mode", `Misi kata: ${targetWord}`, "API", wrapper.tokens);
+    return wrapper.data;
+  },
+
+  // 9. Survival Mode - Evaluate Response
+  evaluateSurvivalResponse: async (situation: string, targetWord: string, userResponse: string): Promise<ChallengeFeedback> => {
+    const wrapper = await callWithRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: `Role: Strict Language Examiner.
+        Situation: ${situation}
+        Required Word: "${targetWord}"
+        User Response: "${userResponse}"
+        
+        Task: Evaluate if the user used the word "${targetWord}" correctly AND appropriately for the situation in ENGLISH.
+        
+        Output JSON: { score (1-10), feedback (Indonesian), improved_response (Better ENGLISH response) }`,
+        config: {
+          systemInstruction: TUTOR_INSTRUCTION,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              score: { type: Type.NUMBER },
+              feedback: { type: Type.STRING },
+              improved_response: { type: Type.STRING }
+            },
+            required: ["score", "feedback", "improved_response"]
+          }
+        }
+      });
+      return { data: JSON.parse(response.text || "{}"), tokens: response.usageMetadata?.totalTokenCount || 0 };
+    });
+    
+    addToHistory("Survival Mode", "Evaluasi Misi", "API", wrapper.tokens);
     return wrapper.data;
   }
 };

@@ -6,7 +6,8 @@ import Translator from './components/Translator';
 import VocabBuilder from './components/VocabBuilder';
 import GrammarPractice from './components/GrammarPractice';
 import DailyChallenge from './components/DailyChallenge';
-import HistoryLog from './components/HistoryLog'; // Pastikan ini ada karena sudah dibuat sebelumnya
+import HistoryLog from './components/HistoryLog';
+import StoryLab from './components/StoryLab'; // <--- IMPORT BARU
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
@@ -24,6 +25,8 @@ const App: React.FC = () => {
         return <DailyChallenge />;
       case AppView.HISTORY:
         return <HistoryLog />;
+      case AppView.STORY_LAB: // <--- CASE BARU
+        return <StoryLab />;
       case AppView.HOME:
       default:
         return <HomeView onNavigate={setCurrentView} />;
@@ -39,7 +42,7 @@ const App: React.FC = () => {
 
 const HomeView: React.FC<{ onNavigate: (view: AppView) => void }> = ({ onNavigate }) => {
   return (
-    <div className="flex flex-col items-center justify-center h-full text-center space-y-8 max-w-3xl mx-auto">
+    <div className="flex flex-col items-center justify-center h-full text-center space-y-8 max-w-5xl mx-auto animate-fade-in">
       <div className="space-y-4">
         <h1 className="text-4xl md:text-5xl font-bold text-brand-900 tracking-tight">
           Belajar Bahasa Inggris <br />
@@ -51,8 +54,8 @@ const HomeView: React.FC<{ onNavigate: (view: AppView) => void }> = ({ onNavigat
       </div>
 
       {/* Grid Card Menu Utama */}
-      <div className="grid md:grid-cols-2 gap-4 w-full max-w-2xl">
-        {/* Card 1: Translator diganti ke posisi utama */}
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 w-full px-4">
+        {/* Card 1: Translator */}
         <div 
             onClick={() => onNavigate(AppView.TRANSLATE)}
             className="group p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:border-accent-300 cursor-pointer transition-all text-left"
@@ -64,7 +67,19 @@ const HomeView: React.FC<{ onNavigate: (view: AppView) => void }> = ({ onNavigat
             <p className="text-slate-500 text-sm mt-1">Bukan sekadar translate, tapi paham 'kenapa' grammar-nya begitu.</p>
         </div>
 
-        {/* Card 2: Daily Challenge */}
+        {/* Card 2: Story Lab (BARU) */}
+        <div 
+            onClick={() => onNavigate(AppView.STORY_LAB)}
+            className="group p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:border-purple-300 cursor-pointer transition-all text-left"
+        >
+            <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            </div>
+            <h3 className="text-lg font-bold text-slate-900">Story Lab</h3>
+            <p className="text-slate-500 text-sm mt-1">Belajar dari novel & anime. Simpan kata, lalu tes hafalanmu.</p>
+        </div>
+
+        {/* Card 3: Daily Challenge */}
         <div 
             onClick={() => onNavigate(AppView.CHALLENGE)}
             className="group p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md hover:border-brand-300 cursor-pointer transition-all text-left"

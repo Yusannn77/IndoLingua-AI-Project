@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AppView } from '../types';
-import { Languages, BookOpen, CheckSquare, Trophy, Menu, X, GraduationCap, History as HistoryIcon } from 'lucide-react';
+import { Languages, BookOpen, CheckSquare, Trophy, Menu, X, GraduationCap, History as HistoryIcon, Sparkles } from 'lucide-react';
 
 interface LayoutProps {
   currentView: AppView;
@@ -12,9 +12,9 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, children }) =>
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
-    // CHAT ITEM DIHAPUS DARI SINI
     { view: AppView.TRANSLATE, label: 'Terjemah & Jelaskan', icon: Languages },
     { view: AppView.VOCAB, label: 'Kamus Kontekstual', icon: BookOpen },
+    { view: AppView.STORY_LAB, label: 'Story Lab', icon: Sparkles }, // <--- INI BARU
     { view: AppView.GRAMMAR, label: 'Latihan Grammar', icon: CheckSquare },
     { view: AppView.CHALLENGE, label: 'Tantangan Harian', icon: Trophy },
     { view: AppView.HISTORY, label: 'Riwayat Request', icon: HistoryIcon },
@@ -85,7 +85,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onNavigate, children }) =>
           <span className="font-semibold text-slate-900">
             {navItems.find(i => i.view === currentView)?.label || 'Home'}
           </span>
-          <div className="w-8" /> {/* Spacer */}
+          <div className="w-8" />
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-8">

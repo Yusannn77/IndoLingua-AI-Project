@@ -12,17 +12,16 @@ const HistoryLog: React.FC = () => {
   useEffect(() => {
     // Load data awal
     const allLogs = GeminiService.getHistory();
-    // Kita balik urutannya di UI agar yang terbaru ada di paling atas (tabel biasanya begitu)
+    // Kita balik urutannya di UI agar yang terbaru ada di paling atas
     setLogs([...allLogs].reverse());
 
     // Realtime update (opsional) - Gunakan interval yang lebih efisien
     const interval = setInterval(() => {
       const updatedLogs = GeminiService.getHistory();
-      // Bandingkan panjang logs untuk menentukan apakah perlu update
       if (updatedLogs.length !== logs.length) {
         setLogs([...updatedLogs].reverse());
       }
-    }, 5000); // Perbarui setiap 5 detik, bukan 2 detik
+    }, 5000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -64,7 +63,7 @@ const HistoryLog: React.FC = () => {
                             <th className="p-4 font-semibold">Fitur</th>
                             <th className="p-4 font-semibold">Detail Aktivitas</th>
                             <th className="p-4 font-semibold w-32">Token Used</th>
-                            <th className="p-4 font-semibold w-40 text-right">Waktu</th>
+                            <th className="p-4 font-semibold w-48 text-right">Waktu</th> {/* Lebar kolom ditambah */}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -109,10 +108,18 @@ const HistoryLog: React.FC = () => {
                                         )}
                                     </td>
 
-                                    {/* Waktu */}
+                                    {/* Waktu (UPDATED FORMAT) */}
                                     <td className="p-4 text-right">
-                                        <span className="text-slate-500 text-sm tabular-nums">
-                                            {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                        <span className="text-slate-500 text-xs md:text-sm font-mono tabular-nums">
+                                            {item.timestamp.toLocaleString('id-ID', {
+                                                year: 'numeric',
+                                                month: 'short', // Jan, Feb, dst
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                second: '2-digit',
+                                                hour12: false // Pakai format 24 jam (21.00)
+                                            })}
                                         </span>
                                     </td>
                                 </tr>

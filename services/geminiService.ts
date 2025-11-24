@@ -157,10 +157,26 @@ export const GeminiService = {
   explainVocab: (word: string) => 
     executeWithTelemetry<VocabResult>("Vocab Builder", `vocab:${word.trim().toLowerCase()}`, `Mencari kata: "${word}"`, 
       () => generateJson(
-        `Role: Indonesian English Teacher. Task: Explain "${word}".
-         REQUIRED JSON OUTPUT:
+        `Role: Strict English Lexicographer.
+         Target Word: "${word}"
+
+         CRITICAL INSTRUCTIONS:
+         1. LANGUAGE CHECK (Must be English):
+            - If "${word}" is an INDONESIAN word (e.g., "mencari", "makan", "rumah") -> REJECT IMMEDIATELY.
+            - If "${word}" is NOT found in standard English dictionaries -> REJECT IMMEDIATELY.
+            - Do NOT translate the input to English to fix it. The input MUST be English.
+
+         2. FORMATTING (If Valid):
+            - "context_usage": MUST be in this exact format: "English sentence. (Indonesian translation in parentheses)".
+            - Example: "The building is tall. (Bangunan itu tinggi.)"
+
+         DECISION LOGIC:
+         - IF REJECTED: Output JSON with "word": "INVALID_SCOPE". Leave all other fields as empty strings. DO NOT generate explanations.
+         - IF VALID: Generate full JSON content.
+
+         JSON Schema:
          {
-           "word": "${word}",
+           "word": "INVALID_SCOPE" or "Correct English Word",
            "meaning": "Definisi singkat padat dalam Bahasa Indonesia.",
            "context_usage": "English sentence. (Terjemahan Indonesia)",
            "nuance_comparison": "Jelaskan nuansa dalam Bahasa Indonesia.",
@@ -200,7 +216,6 @@ export const GeminiService = {
     executeWithTelemetry<SurvivalScenario>("Survival Mode", null, `Misi: ${word}`, 
       () => generateJson(`Create scenario for "${word}"...`, { type: Type.OBJECT, properties: { word: { type: Type.STRING }, situation: { type: Type.STRING } }, required: ["word", "situation"] })),
 
-  // --- FIXED: FAIR & HELPFUL GRADING ---
   evaluateSurvivalResponse: (sit: string, word: string, res: string) =>
     executeWithTelemetry<ChallengeFeedback>("Survival Mode", null, "Evaluasi Misi", 
       () => generateJson(
@@ -222,7 +237,7 @@ export const GeminiService = {
         { 
           type: Type.OBJECT, 
           properties: { 
-            score: { type: Type.INTEGER }, // Force Integer to avoid 0.7
+            score: { type: Type.INTEGER }, 
             feedback: { type: Type.STRING }, 
             improved_response: { type: Type.STRING } 
           }, 

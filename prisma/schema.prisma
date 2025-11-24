@@ -1,0 +1,63 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- TABEL 1: KOSAKATA (Flashcard) ---
+// Menggantikan penyimpanan di LocalStorage 'indolingua_vocab_v1'
+model Vocab {
+  id               String   @id @default(cuid())
+  word             String
+  translation      String
+  originalSentence String   // Konteks kalimat asli
+  mastered         Boolean  @default(false) // Status hafalan
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// --- TABEL 2: RIWAYAT (History) ---
+// Untuk mencatat penggunaan Token AI agar terpantau
+model History {
+  id        String   @id @default(cuid())
+  feature   String   // Misal: "Vocab Builder", "Story Lab"
+  details   String   // Misal: "Mencari kata: run"
+  source    String   // 'API' atau 'CACHE'
+  tokens    Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+// --- TABEL 3: MISI HARIAN (Daily Challenge) ---
+// Menyimpan progress tantangan harian user
+model DailyProgress {
+  id        String   @id @default(cuid())
+  date      String   @unique // Format: "2023-10-27" (Unique agar 1 hari cuma 1 record)
+  targets   String[] // Array kata target hari ini
+  memorized String[] // Array kata yang sudah dihafal
+  completed String[] // Array kata yang sudah lulus survival mode
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// TABEL BARU UNTUK DATA STATIS
+model Story {
+  id        Int      @id @default(autoincrement())
+  english   String
+  source    String   // Genre: "Romance", "Horror"
+  createdAt DateTime @default(now())
+}
+
+model GrammarQuestion {
+  id           String   @id @default(cuid())
+  question     String
+  options      String[] // Array string (Postgres supports this)
+  correctIndex Int
+  explanation  String
+  difficulty   String   // 'beginner' | 'intermediate'
+  createdAt    DateTime @default(now())
+}

@@ -1,12 +1,10 @@
+'use client';
+
 import React, { useState } from 'react';
 import { Search, Quote, SpellCheck, Sparkles, AlertCircle, XCircle } from 'lucide-react';
-import { GeminiService } from '../services/geminiService';
-import { VocabResult } from '../types';
+import { GeminiService } from '@/services/geminiService';
+import { VocabResult } from '@/types';
 
-/**
- * Stage 1 Validation: Syntax Check
- * Filters out obvious non-English scripts (Numbers, Symbols, Kanji, etc.)
- */
 const isLatinScript = (text: string): boolean => {
   const LATIN_REGEX = /^[a-zA-Z\s'-]+$/;
   return LATIN_REGEX.test(text);
@@ -16,8 +14,6 @@ const VocabBuilder: React.FC = () => {
   const [word, setWord] = useState('');
   const [data, setData] = useState<VocabResult | null>(null);
   const [loading, setLoading] = useState(false);
-  
-  // State Error & Modal
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showInvalidModal, setShowInvalidModal] = useState(false);
 
@@ -28,8 +24,6 @@ const VocabBuilder: React.FC = () => {
 
     try {
       const result = await GeminiService.explainVocab(targetWord);
-      
-      // Stage 2 Validation: Semantic Check (from AI - via INVALID_SCOPE check)
       if (result.word === 'INVALID_SCOPE') {
         setErrorMsg(`"${targetWord}" sepertinya bukan kata Bahasa Inggris yang valid. Mohon masukkan kata Bahasa Inggris.`);
       } else {
@@ -45,13 +39,11 @@ const VocabBuilder: React.FC = () => {
 
   const handleSearch = (e?: React.FormEvent, keyword?: string) => {
     if (e) e.preventDefault();
-    
     const rawInput = keyword ?? word;
     const sanitizedInput = rawInput.trim();
 
     if (!sanitizedInput) return;
 
-    // Stage 1: Client-side Validation (Zero Cost)
     if (!isLatinScript(sanitizedInput)) {
       setShowInvalidModal(true);
       return;
@@ -94,7 +86,6 @@ const VocabBuilder: React.FC = () => {
         </button>
       </form>
 
-      {/* Error Feedback UI (Server Side / AI Error) */}
       {errorMsg && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 text-red-700 animate-slide-up">
             <AlertCircle size={20} />
@@ -102,7 +93,6 @@ const VocabBuilder: React.FC = () => {
         </div>
       )}
 
-      {/* Loading Skeleton */}
       {loading && (
         <div className="space-y-6 animate-pulse">
             <div className="bg-white border-l-4 border-slate-200 rounded-r-xl p-6 flex flex-col gap-3">
@@ -116,7 +106,6 @@ const VocabBuilder: React.FC = () => {
         </div>
       )}
 
-      {/* Result View (Only if Valid) */}
       {!loading && data && (
         <div className="space-y-6 animate-fade-in">
           <div className="bg-white border-l-4 border-brand-500 rounded-r-xl shadow-sm p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -139,8 +128,9 @@ const VocabBuilder: React.FC = () => {
                 <Quote size={24} className="group-hover:scale-110 transition-transform"/>
                 <h4 className="font-semibold text-lg text-slate-800">Konteks Penggunaan</h4>
               </div>
+              {/* FIXED: Menghapus tanda kutip ganda yang mengganggu JSX */}
               <p className="text-slate-700 leading-relaxed italic bg-accent-50/50 p-4 rounded-lg border border-accent-100">
-                "{data.context_usage}"
+                &quot;{data.context_usage}&quot;
               </p>
             </div>
 
@@ -171,7 +161,6 @@ const VocabBuilder: React.FC = () => {
         </div>
       )}
 
-      {/* --- CUSTOM MODAL FOR INVALID INPUT --- */}
       {showInvalidModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all scale-100 animate-slide-up">
@@ -193,7 +182,6 @@ const VocabBuilder: React.FC = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };

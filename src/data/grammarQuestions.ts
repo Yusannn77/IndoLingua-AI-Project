@@ -1,4 +1,4 @@
-import { GrammarQuestion } from '../types';
+import { GrammarQuestion } from '../types/index';
 
 // --- LEVEL 1: BEGINNER (Dasar-dasar) ---
 export const beginnerQuestions: GrammarQuestion[] = [

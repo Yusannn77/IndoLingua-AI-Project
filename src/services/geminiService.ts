@@ -10,7 +10,7 @@ import {
 } from "../types";
 
 const CONFIG = {
-  API_KEY: process.env.API_KEY || '',
+  API_KEY: process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '',
   MODEL_NAME: 'gemini-2.5-flash-lite', 
   HISTORY_KEY: 'indolingua_history_v1',
   TOKEN_KEY: 'indolingua_token_usage_v1',
@@ -18,6 +18,13 @@ const CONFIG = {
   MAX_HISTORY_ITEMS: 50,
   MAX_RETRIES: 3,
 };
+
+// --- TYPES HELPER ---
+// Kita buat tipe khusus untuk Error API supaya tidak perlu pakai 'any'
+interface GeminiError {
+  message?: string;
+  status?: number;
+}
 
 // --- INFRASTRUCTURE ---
 
@@ -37,7 +44,9 @@ class LocalStore<T> {
 }
 
 const historyStore = new LocalStore<HistoryItem>(CONFIG.HISTORY_KEY);
-const cacheStore = new Map<string, { data: any; timestamp: number }>();
+
+// FIXED: Menggunakan 'unknown' bukan 'any' untuk data cache yang generik
+const cacheStore = new Map<string, { data: unknown; timestamp: number }>();
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
 
@@ -97,10 +106,11 @@ async function executeWithTelemetry<T>(
   apiCall: () => Promise<{ data: T; tokens: number }>
 ): Promise<T> {
   if (cacheKey && cacheStore.has(cacheKey)) {
-    const { data, timestamp } = cacheStore.get(cacheKey)!;
-    if (Date.now() - timestamp < CONFIG.CACHE_DURATION_MS) {
+    const cached = cacheStore.get(cacheKey)!;
+    if (Date.now() - cached.timestamp < CONFIG.CACHE_DURATION_MS) {
       logHistory(featureName, logDetail, "CACHE");
-      return data;
+      // FIXED: Casting 'unknown' kembali ke 'T' saat diambil dari cache
+      return cached.data as T;
     }
     cacheStore.delete(cacheKey);
   }
@@ -113,28 +123,32 @@ async function executeWithTelemetry<T>(
       logHistory(featureName, logDetail, "API", tokens);
       updateTokenUsage(tokens);
       return data;
-    } catch (error: any) {
-      const isRetryable = error?.message?.includes('503') || error?.status === 503 || error?.status === 429;
+    } catch (error: unknown) { 
+      // FIXED: Menggunakan tipe khusus GeminiError, bukan any
+      const err = error as GeminiError; 
+      
+      const isRetryable = err?.message?.includes('503') || err?.status === 503 || err?.status === 429;
+      
       if (isRetryable && attempt < CONFIG.MAX_RETRIES - 1) {
         attempt++;
         await delay(attempt * 1500);
         continue;
       }
-      console.error(`Gemini API Error [${featureName}]:`, error);
-      throw error;
+      console.error(`Gemini API Error [${featureName}]:`, err);
+      throw error; // Lempar error asli
     }
   }
   throw new Error("Request failed after max retries");
 }
 
-async function generateJson<T>(prompt: string, responseSchema: any): Promise<{ data: T; tokens: number }> {
+async function generateJson<T>(prompt: string, responseSchema: Schema): Promise<{ data: T; tokens: number }> {
   const response = await client.models.generateContent({
     model: CONFIG.MODEL_NAME,
     contents: prompt,
     config: {
       systemInstruction: "You are IndoLingua. Output valid JSON only.",
       responseMimeType: "application/json",
-      responseSchema: responseSchema as Schema
+      responseSchema: responseSchema
     }
   });
   return {
@@ -157,30 +171,27 @@ export const GeminiService = {
   explainVocab: (word: string) => 
     executeWithTelemetry<VocabResult>("Vocab Builder", `vocab:${word.trim().toLowerCase()}`, `Mencari kata: "${word}"`, 
       () => generateJson(
-        `Role: Strict English Lexicographer.
-         Target Word: "${word}"
+        `Role: Strict English Dictionary & Validator.
+         Input Word: "${word}"
 
-         CRITICAL INSTRUCTIONS:
-         1. LANGUAGE CHECK (Must be English):
-            - If "${word}" is an INDONESIAN word (e.g., "mencari", "makan", "rumah") -> REJECT IMMEDIATELY.
-            - If "${word}" is NOT found in standard English dictionaries -> REJECT IMMEDIATELY.
-            - Do NOT translate the input to English to fix it. The input MUST be English.
+         TASK 1: VALIDATION (Gatekeeper)
+         - Check if "${word}" is a VALID ENGLISH WORD.
+         - REJECT IF: The word is Indonesian (e.g., "mencuri", "makan", "rumah") OR meaningless.
+         - ACTION ON REJECT: Return JSON with "word" = "INVALID_SCOPE" IMMEDIATELY. Leave other fields empty. Do NOT explain why.
 
-         2. FORMATTING (If Valid):
-            - "context_usage": MUST be in this exact format: "English sentence. (Indonesian translation in parentheses)".
-            - Example: "The building is tall. (Bangunan itu tinggi.)"
+         TASK 2: DEFINITION (Only if Valid)
+         - If Valid English: Provide definition, context, and nuance.
+         - CRITICAL RULE for 'context_usage': 
+           Format MUST be: "English sentence. (Indonesian translation)".
+           Example: "The building is tall. (Bangunan itu tinggi.)"
 
-         DECISION LOGIC:
-         - IF REJECTED: Output JSON with "word": "INVALID_SCOPE". Leave all other fields as empty strings. DO NOT generate explanations.
-         - IF VALID: Generate full JSON content.
-
-         JSON Schema:
+         JSON Output Structure:
          {
-           "word": "INVALID_SCOPE" or "Correct English Word",
-           "meaning": "Definisi singkat padat dalam Bahasa Indonesia.",
-           "context_usage": "English sentence. (Terjemahan Indonesia)",
-           "nuance_comparison": "Jelaskan nuansa dalam Bahasa Indonesia.",
-           "synonyms": ["synonym1", "synonym2"]
+           "word": "The word OR 'INVALID_SCOPE'",
+           "meaning": "Indonesian definition (or empty if invalid)",
+           "context_usage": "English sentence. (Indonesian translation) (or empty if invalid)",
+           "nuance_comparison": "Nuance explanation (or empty if invalid)",
+           "synonyms": ["synonym1"] (or empty array)
          }`,
         { 
           type: Type.OBJECT, 

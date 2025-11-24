@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
 import { GeminiService } from '../services/geminiService';
 import { HistoryItem, SavedVocab } from '../types';
@@ -17,60 +19,62 @@ const Dashboard: React.FC = () => {
   const [recentActivity, setRecentActivity] = useState<HistoryItem[]>([]);
 
   useEffect(() => {
-    loadStats();
-  }, []);
+    // FIXED: Fungsi didefinisikan DI DALAM useEffect
+    // Ini mencegah warning linter dan memory leak
+    const loadStats = () => {
+      // 1. Load History
+      const history = GeminiService.getHistory();
+      setRecentActivity(history.slice(0, 5));
 
-  const loadStats = () => {
-    // 1. Load History (Hanya untuk list aktivitas terbaru)
-    const history = GeminiService.getHistory();
-    setRecentActivity(history.slice(0, 5));
+      // 2. Calculate Tokens
+      const tokens = GeminiService.getTotalTokens();
 
-    // 2. Calculate Tokens (FIXED: Ambil dari Permanent Storage)
-    // Sebelumnya kita hitung dari history array yang terbatas 50 item, itu salah.
-    // Sekarang kita ambil total akumulatif dari Service.
-    const tokens = GeminiService.getTotalTokens();
-
-    // 3. Calculate Daily Challenges
-    let challenges = 0;
-    try {
-      const dailyJson = localStorage.getItem(DAILY_STORAGE_KEY);
-      if (dailyJson) {
-        const dailyData = JSON.parse(dailyJson);
-        if (dailyData.completed) {
-             challenges = dailyData.completed.length;
+      // 3. Calculate Daily Challenges
+      let challenges = 0;
+      try {
+        if (typeof window !== 'undefined') {
+          const dailyJson = localStorage.getItem(DAILY_STORAGE_KEY);
+          if (dailyJson) {
+            const dailyData = JSON.parse(dailyJson);
+            if (dailyData.completed) {
+                 challenges = dailyData.completed.length;
+            }
+          }
         }
+      } catch (e) {
+        console.error("Error loading daily stats:", e);
       }
-    } catch (e) {
-      console.error("Error loading daily stats:", e);
-    }
 
-    // 4. Load Vocab for Mastered Count
-    let masteredCount = 0;
-    try {
-      const vocabJson = localStorage.getItem(VOCAB_STORAGE_KEY);
-      if (vocabJson) {
-        const vocabs: SavedVocab[] = JSON.parse(vocabJson);
-        masteredCount = vocabs.filter(v => v.mastered).length;
+      // 4. Load Vocab for Mastered Count
+      let masteredCount = 0;
+      try {
+        if (typeof window !== 'undefined') {
+          const vocabJson = localStorage.getItem(VOCAB_STORAGE_KEY);
+          if (vocabJson) {
+            const vocabs: SavedVocab[] = JSON.parse(vocabJson);
+            masteredCount = vocabs.filter(v => v.mastered).length;
+          }
+        }
+      } catch (e) {
+        console.error("Error loading vocab stats:", e);
       }
-    } catch (e) {
-      console.error("Error loading vocab stats:", e);
-    }
 
-    setStats({
-      challengesCompleted: challenges,
-      masteredVocab: masteredCount,
-      monthlyTokens: tokens,
-      streak: calculateStreak(history)
-    });
-  };
+      // Helper untuk menghitung streak
+      const uniqueDays = new Set(
+        history.map(h => new Date(h.timestamp).toDateString())
+      );
 
-  const calculateStreak = (history: HistoryItem[]) => {
-    if (history.length === 0) return 0;
-    const uniqueDays = new Set(
-      history.map(h => new Date(h.timestamp).toDateString())
-    );
-    return uniqueDays.size; 
-  };
+      setStats({
+        challengesCompleted: challenges,
+        masteredVocab: masteredCount,
+        monthlyTokens: tokens,
+        streak: uniqueDays.size
+      });
+    };
+
+    // Panggil fungsi
+    loadStats();
+  }, []); // Dependency array kosong artinya hanya jalan sekali saat mount
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-12">
@@ -81,7 +85,7 @@ const Dashboard: React.FC = () => {
           <p className="text-slate-500">Pantau progres dan pencapaianmu sejauh ini.</p>
         </div>
         <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm">
-           <Calendar size={18} className="text-brand-500"/>
+           <Calendar size={18} className="text-blue-500"/>
            <span className="text-sm font-medium text-slate-600">
              {new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
            </span>
@@ -90,13 +94,12 @@ const Dashboard: React.FC = () => {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Card 1: Daily Challenges */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-              <Trophy size={80} className="text-brand-600" />
+              <Trophy size={80} className="text-blue-600" />
            </div>
            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-brand-100 text-brand-600 rounded-xl">
+              <div className="p-3 bg-blue-100 text-blue-600 rounded-xl">
                  <Trophy size={24} />
               </div>
               <h3 className="font-semibold text-slate-700">Tantangan Selesai</h3>
@@ -107,7 +110,6 @@ const Dashboard: React.FC = () => {
            </div>
         </div>
 
-        {/* Card 2: Mastered Vocab */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <Brain size={80} className="text-purple-600" />
@@ -124,7 +126,6 @@ const Dashboard: React.FC = () => {
            </div>
         </div>
 
-        {/* Card 3: Token Usage */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <Zap size={80} className="text-amber-500" />

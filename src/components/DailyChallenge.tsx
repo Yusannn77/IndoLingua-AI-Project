@@ -1,9 +1,11 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { Trophy, CheckCircle, Lock, Brain, Target, ArrowRight, RefreshCcw, Star, Zap, Loader2 } from 'lucide-react';
-import { GeminiService } from '../services/geminiService';
-import { ChallengeFeedback, DailyProgress, SurvivalScenario } from '../types';
-import { advancedVocabList } from '../data/advancedVocab';
-import { useLocalStorage } from '../hooks/useLocalStorage'; 
+import { GeminiService } from '@/services/geminiService';
+import { ChallengeFeedback, DailyProgress, SurvivalScenario } from '@/types';
+import { advancedVocabList } from '@/data/advancedVocab';
+import { useLocalStorage } from '@/hooks/useLocalStorage'; 
 
 const STORAGE_KEY = 'indolingua_daily_v1';
 
@@ -16,7 +18,6 @@ const generateDailyMission = (date: string): DailyProgress => ({
   meanings: {}
 });
 
-// --- SUB-COMPONENTS ---
 interface VocabCardProps {
   word: string;
   meaning?: string;
@@ -61,14 +62,11 @@ const VocabCard: React.FC<VocabCardProps> = ({ word, meaning, isMemorized, isCom
   </div>
 );
 
-// --- MAIN COMPONENT ---
 const DailyChallenge: React.FC = () => {
-  // Kita pakai fungsi helper untuk dapat tanggal hari ini secara konsisten
   const getTodayString = () => new Date().toISOString().split('T')[0];
   
   const [today, setToday] = useState(getTodayString());
 
-  // 1. State Management dengan Custom Hook (Load & Init Logic)
   const [progress, setProgress] = useLocalStorage<DailyProgress>(STORAGE_KEY, () => {
     const currentDate = getTodayString();
     const empty = generateDailyMission(currentDate);
@@ -79,12 +77,10 @@ const DailyChallenge: React.FC = () => {
       if (!item) return empty;
       
       const saved = JSON.parse(item);
-      // LOGIC RESET HARIAN (Saat Refresh)
       if (saved.date === currentDate) {
         if (!saved.meanings) saved.meanings = {};
         return saved;
       }
-      // Jika tanggal beda, return misi baru
       return empty;
     } catch { return empty; }
   });
@@ -95,17 +91,13 @@ const DailyChallenge: React.FC = () => {
   const [feedback, setFeedback] = useState<ChallengeFeedback | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // --- NEW: REALTIME DAY CHECKER ---
-  // Menangani kasus user membiarkan tab terbuka semalaman
   useEffect(() => {
     const checkDate = () => {
       const now = getTodayString();
-      // Jika tanggal di state beda dengan tanggal sistem sekarang -> RESET
       if (progress.date !== now) {
         console.log("New day detected! Resetting mission...");
         setToday(now);
         setProgress(generateDailyMission(now));
-        // Reset UI state juga
         setScenario(null);
         setFeedback(null);
         setResponse('');
@@ -113,10 +105,7 @@ const DailyChallenge: React.FC = () => {
       }
     };
 
-    // Cek saat window mendapatkan fokus (user kembali ke tab)
     window.addEventListener('focus', checkDate);
-    
-    // Optional: Cek setiap 1 menit juga
     const interval = setInterval(checkDate, 60000);
 
     return () => {
@@ -125,7 +114,6 @@ const DailyChallenge: React.FC = () => {
     };
   }, [progress.date, setProgress]);
 
-  // --- AUTO-FETCH MEANINGS ---
   useEffect(() => {
     const fetchMeanings = async () => {
       const newMeanings = { ...progress.meanings };
@@ -151,15 +139,12 @@ const DailyChallenge: React.FC = () => {
     };
 
     fetchMeanings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress.targets]);
 
-  // Computed Data
   const completedCount = progress.completed.length;
   const memorizedCount = progress.memorized.length;
   const availableForSurvival = progress.memorized.filter(w => !progress.completed.includes(w));
 
-  // Actions
   const toggleMemorized = (word: string) => {
     setProgress(prev => ({
       ...prev,
@@ -218,7 +203,6 @@ const DailyChallenge: React.FC = () => {
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 pb-12 animate-fade-in">
-      {/* HEADER */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
          <div className="text-center md:text-left">
             <h2 className="text-2xl font-bold text-slate-900 flex items-center justify-center md:justify-start gap-2">
@@ -240,7 +224,6 @@ const DailyChallenge: React.FC = () => {
          </div>
       </div>
 
-      {/* TABS */}
       <div className="flex border-b border-slate-200 bg-white rounded-t-xl overflow-hidden">
          <button 
            onClick={() => setTab('VOCAB')} 
@@ -258,7 +241,6 @@ const DailyChallenge: React.FC = () => {
          </button>
       </div>
 
-      {/* CONTENT */}
       {tab === 'VOCAB' ? (
         <div className="animate-slide-up">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -323,7 +305,7 @@ const DailyChallenge: React.FC = () => {
                   TARGET WORD: {scenario.word}
                 </div>
                 <h3 className="text-2xl font-medium text-slate-900 leading-relaxed">
-                  "{scenario.situation}"
+                  &quot;{scenario.situation}&quot;
                 </h3>
               </div>
 
@@ -366,12 +348,12 @@ const DailyChallenge: React.FC = () => {
                   </div>
 
                   <p className="text-slate-800 text-lg leading-relaxed mb-6 font-medium">
-                    "{feedback.feedback}"
+                    &quot;{feedback.feedback}&quot;
                   </p>
 
                   <div className="bg-white/60 p-5 rounded-2xl border border-slate-200/50 mb-8">
                     <p className="text-xs font-bold text-slate-400 uppercase mb-2">Saran Jawaban:</p>
-                    <p className="italic text-slate-600 text-lg">"{feedback.improved_response}"</p>
+                    <p className="italic text-slate-600 text-lg">&quot;{feedback.improved_response}&quot;</p>
                   </div>
 
                   <div className="flex gap-3">

@@ -1,7 +1,9 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
 import { History as HistoryIcon, Server, Database, ChevronLeft, ChevronRight, Zap, Trash2 } from 'lucide-react';
-import { GeminiService } from '../services/geminiService';
-import { HistoryItem } from '../types';
+import { GeminiService } from '@/services/geminiService';
+import { HistoryItem } from '@/types';
 
 const ITEMS_PER_PAGE = 8;
 
@@ -9,11 +11,10 @@ const HistoryLog: React.FC = () => {
   const [logs, setLogs] = useState<HistoryItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // FIX: Logic auto-refresh yang lebih cerdas (Cek ID item pertama)
   useEffect(() => {
     const fetchLogs = () => {
       const allLogs = GeminiService.getHistory();
-      // Jika data berbeda (cek item pertama atau panjang array), update state
+      // Logic auto-refresh: Jika data berbeda (cek item pertama), update state
       setLogs(prevLogs => {
         const isDifferent = 
           allLogs.length !== prevLogs.length || 
@@ -26,7 +27,7 @@ const HistoryLog: React.FC = () => {
     // Load awal
     fetchLogs();
 
-    // Polling interval setiap 2 detik agar terasa realtime
+    // Polling interval setiap 2 detik agar terasa realtime saat user pindah tab
     const interval = setInterval(fetchLogs, 2000);
     return () => clearInterval(interval);
   }, []);

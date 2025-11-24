@@ -1,8 +1,10 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Layers, RotateCcw, Archive, Sparkles, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
-import { GeminiService } from '../services/geminiService';
-import { StoryScenario, SavedVocab, ChallengeFeedback } from '../types';
-import { storyCollection } from '../data/storyData';
+import { GeminiService } from '@/services/geminiService';
+import { StoryScenario, SavedVocab, ChallengeFeedback } from '@/types';
+import { storyCollection } from '@/data/storyData';
 
 const STORAGE_KEY = 'indolingua_vocab_v1';
 const ITEMS_PER_PAGE = 5;
@@ -12,7 +14,6 @@ type LabMode = 'STORY' | 'FLASHCARD' | 'RECALL' | 'HISTORY';
 const StoryLab: React.FC = () => {
   const [mode, setMode] = useState<LabMode>('STORY');
   
-  // --- GLOBAL DATA ---
   const [savedVocabs, setSavedVocabs] = useState<SavedVocab[]>(() => {
     try {
       if (typeof window !== 'undefined') {
@@ -25,22 +26,18 @@ const StoryLab: React.FC = () => {
     return [];
   });
 
-  // --- STATES ---
   const [scenario, setScenario] = useState<StoryScenario | null>(null);
   const [userTranslation, setUserTranslation] = useState('');
   const [storyFeedback, setStoryFeedback] = useState<ChallengeFeedback | null>(null);
   const [loadingStory, setLoadingStory] = useState(false);
   const [loadingWord, setLoadingWord] = useState<string | null>(null);
 
-  // Recall States
   const [recallCard, setRecallCard] = useState<SavedVocab | null>(null);
   const [recallInput, setRecallInput] = useState('');
   const [recallStatus, setRecallStatus] = useState<'IDLE' | 'CORRECT' | 'WRONG'>('IDLE');
 
-  // History State
   const [historyPage, setHistoryPage] = useState(1);
 
-  // --- EFFECTS ---
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(savedVocabs));
   }, [savedVocabs]);
@@ -49,7 +46,6 @@ const StoryLab: React.FC = () => {
     loadNewScenario();
   }, []);
 
-  // --- STORY ACTIONS ---
   const loadNewScenario = () => {
     setLoadingStory(true);
     setStoryFeedback(null);
@@ -110,66 +106,49 @@ const StoryLab: React.FC = () => {
     });
   };
 
-  // --- RECALL LOGIC (FIXED STALE STATE) ---
-  
   const startRecall = () => {
     setMode('RECALL');
-    pickNextRecallCard(); // Pakai list saat ini
+    pickNextRecallCard(savedVocabs);
   };
 
-  // FIX 1: Terima parameter list opsional agar bisa membaca data terbaru (future state)
   const pickNextRecallCard = (currentList?: SavedVocab[]) => {
     const sourceList = currentList || savedVocabs;
-    
     setRecallInput('');
     setRecallStatus('IDLE');
-    
     const activeList = sourceList.filter(v => !v.mastered);
-    
     if (activeList.length === 0) {
-      setRecallCard(null); // Ini kuncinya: Set null jika list habis
+      setRecallCard(null); 
       return;
     }
-    
     const random = activeList[Math.floor(Math.random() * activeList.length)];
     setRecallCard(random);
   };
 
   const submitRecall = () => {
     if (!recallCard) return;
-
     const cleanInput = recallInput.toLowerCase().trim();
     const targetWord = recallCard.word.toLowerCase();
 
     if (cleanInput === targetWord) {
       setRecallStatus('CORRECT');
-      
       setTimeout(() => {
-        // FIX 2: Hitung list baru DULUAN
         const updatedList = savedVocabs.map(v => 
           v.id === recallCard.id ? { ...v, mastered: true } : v
         );
-        
-        // Update State Utama
         setSavedVocabs(updatedList);
-        
-        // Update UI Recall langsung dengan list baru (tanpa nunggu re-render)
         pickNextRecallCard(updatedList);
-      }, 1200); // Delay sedikit biar user lihat tulisan "Benar"
-
+      }, 1200);
     } else {
       setRecallStatus('WRONG');
     }
   };
 
-  // --- HISTORY LOGIC ---
   const historyList = savedVocabs.filter(v => v.mastered);
   const totalHistoryPages = Math.ceil(historyList.length / ITEMS_PER_PAGE);
   const currentHistoryData = historyList.slice((historyPage - 1) * ITEMS_PER_PAGE, historyPage * ITEMS_PER_PAGE);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-12">
-      {/* NAVIGATION */}
       <div className="flex flex-wrap justify-center gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-sm w-fit mx-auto">
         <button onClick={() => setMode('STORY')} className={`px-4 py-2 rounded-lg font-medium text-sm flex gap-2 ${mode === 'STORY' ? 'bg-purple-100 text-purple-700' : 'text-slate-500 hover:bg-slate-50'}`}>
           <BookOpen size={16} /> Story
@@ -188,7 +167,6 @@ const StoryLab: React.FC = () => {
         </button>
       </div>
 
-      {/* MODE 1: STORY */}
       {mode === 'STORY' && (
         <div className="animate-fade-in space-y-6">
           <div className="bg-white p-6 md:p-10 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
@@ -219,14 +197,13 @@ const StoryLab: React.FC = () => {
           {storyFeedback && (
              <div className="bg-green-50 border border-green-100 p-6 rounded-2xl animate-slide-up">
                 <div className="flex items-center gap-2 mb-3 font-bold text-green-800">Skor AI: {storyFeedback.score}/10</div>
-                <p className="text-slate-700 mb-2">{storyFeedback.feedback}</p>
-                <p className="text-slate-900 italic font-medium mt-2">"{storyFeedback.improved_response}"</p>
+                <p className="text-slate-700 mb-2">&quot;{storyFeedback.feedback}&quot;</p>
+                <p className="text-slate-900 italic font-medium mt-2">&quot;{storyFeedback.improved_response}&quot;</p>
              </div>
           )}
         </div>
       )}
 
-      {/* MODE 2: FLASH CARD */}
       {mode === 'FLASHCARD' && (
         <div className="animate-fade-in">
            <div className="text-center mb-6">
@@ -246,7 +223,7 @@ const StoryLab: React.FC = () => {
                           <button onClick={(e) => handleDeleteVocab(vocab.id, e)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
                        </div>
                        <div className="mb-3"><p className="text-sm text-slate-400 font-medium uppercase mb-1">Arti:</p><p className="text-lg text-slate-800 font-medium">{vocab.translation}</p></div>
-                       <div className="bg-slate-50 p-3 rounded-lg border border-slate-100"><p className="text-xs text-slate-400 mb-1">Konteks:</p><p className="text-xs text-slate-600 italic">"...{vocab.originalSentence}..."</p></div>
+                       <div className="bg-slate-50 p-3 rounded-lg border border-slate-100"><p className="text-xs text-slate-400 mb-1">Konteks:</p><p className="text-xs text-slate-600 italic">&quot;...{vocab.originalSentence}...&quot;</p></div>
                     </div>
                  ))}
               </div>
@@ -254,11 +231,9 @@ const StoryLab: React.FC = () => {
         </div>
       )}
 
-      {/* MODE 3: RECALL (FIXED) */}
       {mode === 'RECALL' && (
         <div className="animate-fade-in max-w-xl mx-auto">
            {!recallCard ? (
-              // EMPTY STATE (Akan muncul jika activeList.length === 0)
               <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-sm">
                  <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6"><Sparkles size={40} /></div>
                  <h2 className="text-2xl font-bold text-slate-800 mb-2">Luar Biasa!</h2>
@@ -270,8 +245,8 @@ const StoryLab: React.FC = () => {
                  <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-amber-400 to-orange-500"></div>
                  <div className="p-8 text-center border-b border-slate-100 bg-slate-50/30">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8">Recall Challenge</p>
-                    <div className="mb-8"><p className="text-sm text-slate-500 mb-2">Apa Bahasa Inggris dari:</p><h2 className="text-3xl md:text-4xl font-bold text-slate-800">"{recallCard.translation}"</h2></div>
-                    <div className="inline-block bg-white p-4 rounded-xl border border-slate-200 shadow-sm max-w-sm"><p className="text-xs text-slate-400 mb-1 font-bold">Konteks Kalimat:</p><p className="text-sm text-slate-600 italic">"...{recallCard.originalSentence.replace(new RegExp(recallCard.word, 'gi'), '_____')}..."</p></div>
+                    <div className="mb-8"><p className="text-sm text-slate-500 mb-2">Apa Bahasa Inggris dari:</p><h2 className="text-3xl md:text-4xl font-bold text-slate-800">&quot;{recallCard.translation}&quot;</h2></div>
+                    <div className="inline-block bg-white p-4 rounded-xl border border-slate-200 shadow-sm max-w-sm"><p className="text-xs text-slate-400 mb-1 font-bold">Konteks Kalimat:</p><p className="text-sm text-slate-600 italic">&quot;...{recallCard.originalSentence.replace(new RegExp(recallCard.word, 'gi'), '_____')}...&quot;</p></div>
                  </div>
                  <div className="p-6 space-y-4">
                     {recallStatus === 'IDLE' ? (
@@ -303,7 +278,6 @@ const StoryLab: React.FC = () => {
         </div>
       )}
 
-      {/* MODE 4: HISTORY */}
       {mode === 'HISTORY' && (
         <div className="animate-fade-in">
            <div className="text-center mb-8"><h2 className="text-xl font-bold text-slate-800">Kamus Pribadi (Mastered)</h2><p className="text-slate-500 text-sm">Kata-kata yang sudah dikuasai.</p></div>
@@ -313,7 +287,7 @@ const StoryLab: React.FC = () => {
                  <tbody className="divide-y divide-slate-100">
                     {currentHistoryData.length === 0 ? (<tr><td colSpan={3} className="p-8 text-center text-slate-400">Belum ada data.</td></tr>) : (
                        currentHistoryData.map((vocab) => (
-                          <tr key={vocab.id} className="hover:bg-slate-50/50"><td className="p-4 font-bold text-slate-800">{vocab.word}</td><td className="p-4 text-slate-600">{vocab.translation}</td><td className="p-4 text-slate-500 text-sm italic hidden md:table-cell truncate max-w-xs">"{vocab.originalSentence}"</td></tr>
+                          <tr key={vocab.id} className="hover:bg-slate-50/50"><td className="p-4 font-bold text-slate-800">{vocab.word}</td><td className="p-4 text-slate-600">{vocab.translation}</td><td className="p-4 text-slate-500 text-sm italic hidden md:table-cell truncate max-w-xs">&quot;{vocab.originalSentence}&quot;</td></tr>
                        ))
                     )}
                  </tbody>

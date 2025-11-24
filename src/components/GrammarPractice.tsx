@@ -1,8 +1,10 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, HelpCircle, Loader2, Sparkles, BookOpen } from 'lucide-react';
-import { GeminiService } from '../services/geminiService';
-import { GrammarQuestion } from '../types';
-import { beginnerQuestions, intermediateQuestions } from '../data/grammarQuestions';
+import { GeminiService } from '@/services/geminiService';
+import { GrammarQuestion } from '@/types';
+import { beginnerQuestions, intermediateQuestions } from '@/data/grammarQuestions';
 
 const GrammarPractice: React.FC = () => {
   const [question, setQuestion] = useState<GrammarQuestion | null>(null);

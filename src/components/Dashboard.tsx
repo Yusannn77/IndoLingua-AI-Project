@@ -1,16 +1,14 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { GeminiService } from '../services/geminiService';
-import { HistoryItem, SavedVocab } from '../types';
+// FIXED: Hapus 'React' dari import. Gunakan named imports saja.
+import { useEffect, useState, type FC } from 'react';
+import { DBService } from '@/services/dbService'; 
+import { HistoryItem } from '@/types';
 import { Trophy, Zap, Brain, Activity, Calendar } from 'lucide-react';
 
-const VOCAB_STORAGE_KEY = 'indolingua_vocab_v1';
-const DAILY_STORAGE_KEY = 'indolingua_daily_v1';
-
-const Dashboard: React.FC = () => {
+const Dashboard: FC = () => {
   const [stats, setStats] = useState({
-    challengesCompleted: 0,
+    challengesCompleted: 0, 
     masteredVocab: 0,
     monthlyTokens: 0,
     streak: 0 
@@ -19,62 +17,38 @@ const Dashboard: React.FC = () => {
   const [recentActivity, setRecentActivity] = useState<HistoryItem[]>([]);
 
   useEffect(() => {
-    // FIXED: Fungsi didefinisikan DI DALAM useEffect
-    // Ini mencegah warning linter dan memory leak
-    const loadStats = () => {
-      // 1. Load History
-      const history = GeminiService.getHistory();
-      setRecentActivity(history.slice(0, 5));
-
-      // 2. Calculate Tokens
-      const tokens = GeminiService.getTotalTokens();
-
-      // 3. Calculate Daily Challenges
-      let challenges = 0;
+    const loadStats = async () => {
       try {
-        if (typeof window !== 'undefined') {
-          const dailyJson = localStorage.getItem(DAILY_STORAGE_KEY);
-          if (dailyJson) {
-            const dailyData = JSON.parse(dailyJson);
-            if (dailyData.completed) {
-                 challenges = dailyData.completed.length;
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Error loading daily stats:", e);
+        // 1. Load Vocab dari DB
+        const vocabs = await DBService.getVocabs();
+        const masteredCount = vocabs.filter(v => v.mastered).length;
+
+        // 2. Load History dari DB
+        const history = await DBService.getHistory();
+        setRecentActivity(history.slice(0, 5)); // Ambil 5 terakhir
+
+        // 3. Hitung Tokens dari History DB
+        const totalTokens = history.reduce((acc, curr) => acc + (curr.tokens || 0), 0);
+
+        // 4. Hitung Streak (Logic sederhana berdasarkan tanggal unik di history)
+        const uniqueDays = new Set(
+          history.map(h => new Date(h.timestamp).toDateString())
+        );
+
+        setStats({
+          challengesCompleted: 0, // Nanti ambil dari API DailyProgress
+          masteredVocab: masteredCount,
+          monthlyTokens: totalTokens,
+          streak: uniqueDays.size
+        });
+
+      } catch (error) {
+        console.error("Failed to load dashboard data", error);
       }
-
-      // 4. Load Vocab for Mastered Count
-      let masteredCount = 0;
-      try {
-        if (typeof window !== 'undefined') {
-          const vocabJson = localStorage.getItem(VOCAB_STORAGE_KEY);
-          if (vocabJson) {
-            const vocabs: SavedVocab[] = JSON.parse(vocabJson);
-            masteredCount = vocabs.filter(v => v.mastered).length;
-          }
-        }
-      } catch (e) {
-        console.error("Error loading vocab stats:", e);
-      }
-
-      // Helper untuk menghitung streak
-      const uniqueDays = new Set(
-        history.map(h => new Date(h.timestamp).toDateString())
-      );
-
-      setStats({
-        challengesCompleted: challenges,
-        masteredVocab: masteredCount,
-        monthlyTokens: tokens,
-        streak: uniqueDays.size
-      });
     };
 
-    // Panggil fungsi
     loadStats();
-  }, []); // Dependency array kosong artinya hanya jalan sekali saat mount
+  }, []);
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-12">
@@ -153,19 +127,19 @@ const Dashboard: React.FC = () => {
         <div className="space-y-4">
           {recentActivity.length === 0 ? (
             <div className="text-center py-8 text-slate-400 italic">
-               Belum ada aktivitas. Mulai belajar sekarang!
+               Belum ada aktivitas tercatat di Database.
             </div>
           ) : (
             recentActivity.map((item) => (
               <div key={item.id} className="flex items-start gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
                  <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${
-                    item.source === 'CACHE' ? 'bg-green-400' : 'bg-blue-400'
+                    item.source === 'CACHE' ? 'bg-green-400' : 'bg-amber-400'
                  }`} />
                  <div className="flex-1">
                     <div className="flex justify-between items-start">
                        <h4 className="font-semibold text-slate-800 text-sm">{item.feature}</h4>
                        <span className="text-xs text-slate-400">
-                          {new Date(item.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                          {item.timestamp.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                        </span>
                     </div>
                     <p className="text-slate-600 text-sm mt-1">{item.details}</p>

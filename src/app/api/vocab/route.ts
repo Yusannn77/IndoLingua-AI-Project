@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
@@ -10,30 +8,48 @@ export async function GET() {
     });
     return NextResponse.json(vocabs);
   } catch (error) {
-    return NextResponse.json({ error: 'Gagal mengambil data' }, { status: 500 });
+    return NextResponse.json({ error: 'Error fetching vocab' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { word, translation, originalSentence } = body;
-
-    if (!word || !translation) {
-      return NextResponse.json({ error: 'Data tidak lengkap' }, { status: 400 });
+    // Validasi sederhana
+    if (!body.word || !body.translation) {
+      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
     }
 
     const newVocab = await prisma.vocab.create({
       data: {
-        word,
-        translation,
-        originalSentence: originalSentence || "-"
+        word: body.word,
+        translation: body.translation,
+        originalSentence: body.originalSentence || '-',
+        mastered: false
       }
     });
-    
     return NextResponse.json(newVocab);
   } catch (error) {
-    return NextResponse.json({ error: 'Gagal menyimpan kata' }, { status: 500 });
+    return NextResponse.json({ error: 'Error saving vocab' }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    const body = await request.json();
+
+    if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
+
+    const updated = await prisma.vocab.update({
+      where: { id },
+      data: { mastered: body.mastered }
+    });
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    return NextResponse.json({ error: 'Error updating vocab' }, { status: 500 });
   }
 }
 
@@ -44,12 +60,9 @@ export async function DELETE(request: Request) {
 
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
 
-    await prisma.vocab.delete({
-      where: { id }
-    });
-
+    await prisma.vocab.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: 'Gagal menghapus' }, { status: 500 });
+    return NextResponse.json({ error: 'Error deleting vocab' }, { status: 500 });
   }
 }

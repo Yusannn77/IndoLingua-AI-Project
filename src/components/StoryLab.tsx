@@ -1,48 +1,41 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+// FIXED: Hapus default import 'React'
+import { useState, useEffect, type FC, type MouseEvent } from 'react';
 import { BookOpen, Layers, RotateCcw, Archive, Sparkles, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { GeminiService } from '@/services/geminiService';
+import { DBService } from '@/services/dbService';
 import { StoryScenario, SavedVocab, ChallengeFeedback } from '@/types';
 import { storyCollection } from '@/data/storyData';
 
-const STORAGE_KEY = 'indolingua_vocab_v1';
 const ITEMS_PER_PAGE = 5;
-
 type LabMode = 'STORY' | 'FLASHCARD' | 'RECALL' | 'HISTORY';
 
-const StoryLab: React.FC = () => {
+const StoryLab: FC = () => {
   const [mode, setMode] = useState<LabMode>('STORY');
+  const [savedVocabs, setSavedVocabs] = useState<SavedVocab[]>([]);
   
-  const [savedVocabs, setSavedVocabs] = useState<SavedVocab[]>(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        return saved ? JSON.parse(saved) : [];
-      }
-    } catch (error) {
-      console.error("Gagal membaca storage:", error);
-    }
-    return [];
-  });
-
+  // State untuk Story
   const [scenario, setScenario] = useState<StoryScenario | null>(null);
   const [userTranslation, setUserTranslation] = useState('');
   const [storyFeedback, setStoryFeedback] = useState<ChallengeFeedback | null>(null);
   const [loadingStory, setLoadingStory] = useState(false);
   const [loadingWord, setLoadingWord] = useState<string | null>(null);
 
+  // State untuk Recall
   const [recallCard, setRecallCard] = useState<SavedVocab | null>(null);
   const [recallInput, setRecallInput] = useState('');
   const [recallStatus, setRecallStatus] = useState<'IDLE' | 'CORRECT' | 'WRONG'>('IDLE');
 
   const [historyPage, setHistoryPage] = useState(1);
 
+  // 1. Fetch Data dari DB saat Mount
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(savedVocabs));
-  }, [savedVocabs]);
-
-  useEffect(() => {
+    const loadData = async () => {
+      const data = await DBService.getVocabs();
+      setSavedVocabs(data);
+    };
+    loadData();
     loadNewScenario();
   }, []);
 
@@ -68,29 +61,42 @@ const StoryLab: React.FC = () => {
 
   const handleWordClick = async (word: string) => {
     const cleanWord = word.replace(/[.,!?;:"'()]/g, "").toLowerCase();
+    
+    // Cek duplikasi di state lokal
     if (savedVocabs.some(v => v.word.toLowerCase() === cleanWord)) {
       alert(`Kata "${cleanWord}" sudah ada di Flash Card!`);
       return;
     }
+
     setLoadingWord(cleanWord);
     try {
-      const translation = await GeminiService.getWordDefinition(cleanWord, scenario?.sentence || "");
-      const newVocab: SavedVocab = {
-        id: Date.now().toString() + Math.random().toString().slice(2,5),
+      // Get definition from AI
+      // FIXED: defResult langsung berisi string, tidak perlu .data lagi
+      const translationResult = await GeminiService.getWordDefinition(cleanWord, scenario?.sentence || "");
+      
+      // Save to DB
+      const newVocab = await DBService.addVocab({
         word: cleanWord,
         originalSentence: scenario?.sentence || "",
-        translation: translation, 
-        mastered: false,
-        timestamp: Date.now()
-      };
-      setSavedVocabs(prev => [newVocab, ...prev]);
-    } catch (error) { console.error(error); } 
-    finally { setLoadingWord(null); }
+        translation: translationResult, // FIXED: Langsung pakai variabel string
+      });
+
+      if (newVocab) {
+        setSavedVocabs(prev => [newVocab, ...prev]);
+      }
+    } catch (error) { 
+      console.error(error); 
+    } finally { 
+      setLoadingWord(null); 
+    }
   };
 
-  const handleDeleteVocab = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation(); 
-    setSavedVocabs(prev => prev.filter(v => v.id !== id));
+  const handleDeleteVocab = async (id: string, e: MouseEvent) => {
+    e.stopPropagation();
+    const success = await DBService.deleteVocab(id);
+    if (success) {
+      setSavedVocabs(prev => prev.filter(v => v.id !== id));
+    }
   };
 
   const renderInteractiveSentence = (text: string) => {
@@ -111,11 +117,10 @@ const StoryLab: React.FC = () => {
     pickNextRecallCard(savedVocabs);
   };
 
-  const pickNextRecallCard = (currentList?: SavedVocab[]) => {
-    const sourceList = currentList || savedVocabs;
+  const pickNextRecallCard = (currentList: SavedVocab[]) => {
     setRecallInput('');
     setRecallStatus('IDLE');
-    const activeList = sourceList.filter(v => !v.mastered);
+    const activeList = currentList.filter(v => !v.mastered);
     if (activeList.length === 0) {
       setRecallCard(null); 
       return;
@@ -124,18 +129,24 @@ const StoryLab: React.FC = () => {
     setRecallCard(random);
   };
 
-  const submitRecall = () => {
+  const submitRecall = async () => {
     if (!recallCard) return;
     const cleanInput = recallInput.toLowerCase().trim();
     const targetWord = recallCard.word.toLowerCase();
 
     if (cleanInput === targetWord) {
       setRecallStatus('CORRECT');
+      
+      // Update DB
+      await DBService.toggleVocabMastery(recallCard.id, true);
+
+      // Update UI
+      const updatedList = savedVocabs.map(v => 
+        v.id === recallCard.id ? { ...v, mastered: true } : v
+      );
+      setSavedVocabs(updatedList);
+
       setTimeout(() => {
-        const updatedList = savedVocabs.map(v => 
-          v.id === recallCard.id ? { ...v, mastered: true } : v
-        );
-        setSavedVocabs(updatedList);
         pickNextRecallCard(updatedList);
       }, 1200);
     } else {

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+// FIXED: Hapus default import 'React'. Gunakan named import untuk 'FC' (Functional Component)
+import { useState, useEffect, type FC } from 'react';
 import { Trophy, CheckCircle, Lock, Brain, Target, ArrowRight, RefreshCcw, Star, Zap, Loader2 } from 'lucide-react';
 import { GeminiService } from '@/services/geminiService';
 import { ChallengeFeedback, DailyProgress, SurvivalScenario } from '@/types';
@@ -26,13 +27,14 @@ interface VocabCardProps {
   onClick: () => void;
 }
 
-const VocabCard: React.FC<VocabCardProps> = ({ word, meaning, isMemorized, isCompleted, onClick }) => (
+// FIXED: Menggunakan 'FC' dari named import, bukan 'React.FC'
+const VocabCard: FC<VocabCardProps> = ({ word, meaning, isMemorized, isCompleted, onClick }) => (
   <div 
     onClick={onClick}
     className={`relative p-6 rounded-2xl border-2 cursor-pointer transition-all active:scale-95 group overflow-hidden flex flex-col justify-between min-h-[140px]
       ${isCompleted ? 'bg-emerald-50 border-emerald-400 opacity-90' 
-      : isMemorized ? 'bg-white border-brand-500 shadow-md shadow-brand-100' 
-      : 'bg-white border-slate-200 hover:border-brand-300 hover:shadow-sm'}`}
+      : isMemorized ? 'bg-white border-blue-500 shadow-md shadow-blue-100' 
+      : 'bg-white border-slate-200 hover:border-blue-300 hover:shadow-sm'}`}
   >
     <div className="absolute top-4 right-4 z-10">
       {isCompleted ? (
@@ -40,16 +42,16 @@ const VocabCard: React.FC<VocabCardProps> = ({ word, meaning, isMemorized, isCom
           <Trophy size={18} className="text-emerald-600 fill-emerald-600" />
         </div>
       ) : isMemorized ? (
-        <div className="bg-brand-100 p-1.5 rounded-full">
-          <CheckCircle size={20} className="text-brand-600 fill-brand-600" />
+        <div className="bg-blue-100 p-1.5 rounded-full">
+          <CheckCircle size={20} className="text-blue-600 fill-blue-600" />
         </div>
       ) : (
-        <div className="w-6 h-6 rounded-full border-2 border-slate-300 group-hover:border-brand-400"></div>
+        <div className="w-6 h-6 rounded-full border-2 border-slate-300 group-hover:border-blue-400"></div>
       )}
     </div>
 
     <div className="z-10 mt-2">
-      <h3 className={`text-2xl font-bold mb-1 ${isCompleted ? 'text-emerald-800' : isMemorized ? 'text-brand-700' : 'text-slate-800'}`}>
+      <h3 className={`text-2xl font-bold mb-1 ${isCompleted ? 'text-emerald-800' : isMemorized ? 'text-blue-700' : 'text-slate-800'}`}>
         {word}
       </h3>
       <p className={`text-sm font-medium ${isCompleted ? 'text-emerald-600' : 'text-slate-500'}`}>
@@ -57,12 +59,13 @@ const VocabCard: React.FC<VocabCardProps> = ({ word, meaning, isMemorized, isCom
       </p>
     </div>
 
-    {isMemorized && !isCompleted && <Zap size={80} className="absolute -bottom-4 -right-4 text-brand-50 opacity-50 pointer-events-none" />}
+    {isMemorized && !isCompleted && <Zap size={80} className="absolute -bottom-4 -right-4 text-blue-50 opacity-50 pointer-events-none" />}
     {isCompleted && <Star size={80} className="absolute -bottom-4 -right-4 text-emerald-100 opacity-50 pointer-events-none" />}
   </div>
 );
 
-const DailyChallenge: React.FC = () => {
+// FIXED: Menggunakan 'FC' langsung
+const DailyChallenge: FC = () => {
   const getTodayString = () => new Date().toISOString().split('T')[0];
   
   const [today, setToday] = useState(getTodayString());
@@ -206,7 +209,7 @@ const DailyChallenge: React.FC = () => {
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
          <div className="text-center md:text-left">
             <h2 className="text-2xl font-bold text-slate-900 flex items-center justify-center md:justify-start gap-2">
-              <Target className="text-brand-600" /> Misi Harian
+              <Target className="text-blue-600" /> Misi Harian
             </h2>
             <p className="text-slate-500 text-sm mt-1">Target Tanggal: {today}</p>
          </div>
@@ -214,7 +217,7 @@ const DailyChallenge: React.FC = () => {
          <div className="flex items-center gap-4">
             <div className="text-right">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Progress</p>
-                <p className="text-3xl font-black text-brand-600 leading-none">
+                <p className="text-3xl font-black text-blue-600 leading-none">
                   {completedCount}<span className="text-lg text-slate-300 font-medium">/10</span>
                 </p>
             </div>
@@ -228,14 +231,14 @@ const DailyChallenge: React.FC = () => {
          <button 
            onClick={() => setTab('VOCAB')} 
            className={`flex-1 py-4 font-bold text-sm transition-colors border-b-2 
-             ${tab === 'VOCAB' ? 'border-brand-500 text-brand-600 bg-brand-50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}
+             ${tab === 'VOCAB' ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}
          >
            1. HAFALAN ({memorizedCount}/10)
          </button>
          <button 
            onClick={() => setTab('SURVIVAL')} 
            className={`flex-1 py-4 font-bold text-sm transition-colors border-b-2 
-             ${tab === 'SURVIVAL' ? 'border-brand-500 text-brand-600 bg-brand-50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}
+             ${tab === 'SURVIVAL' ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}
          >
            2. SURVIVAL MODE ({completedCount}/10)
          </button>
@@ -278,7 +281,7 @@ const DailyChallenge: React.FC = () => {
               
               {availableForSurvival.length > 0 ? (
                 <p className="text-slate-600 mb-8 max-w-sm mx-auto">
-                  Kamu punya <span className="font-bold text-brand-600">{availableForSurvival.length} kata</span> yang siap diuji. 
+                  Kamu punya <span className="font-bold text-blue-600">{availableForSurvival.length} kata</span> yang siap diuji. 
                   AI akan memberikan situasi darurat!
                 </p>
               ) : memorizedCount === 0 ? (
@@ -320,7 +323,7 @@ const DailyChallenge: React.FC = () => {
                   <button 
                     onClick={submitMission} 
                     disabled={!response || loading} 
-                    className="w-full py-4 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 disabled:opacity-70 shadow-lg shadow-brand-200 transition-all"
+                    className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-70 shadow-lg shadow-blue-200 transition-all"
                   >
                     {loading ? (
                       <span className="flex items-center justify-center gap-2"><RefreshCcw className="animate-spin" /> Sedang Menilai...</span>

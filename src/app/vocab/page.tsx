@@ -1,6 +1,6 @@
 'use client';
 
-import VocabBuilder from "@/components/VocabBuilder";
+import Dictionary from "@/components/Dictionary";
 export default function VocabPage() {
-  return <VocabBuilder />;
+  return <Dictionary />;
 }

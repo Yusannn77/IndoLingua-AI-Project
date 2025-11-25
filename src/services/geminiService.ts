@@ -98,5 +98,5 @@ export const GeminiService = {
     callAI<ChallengeFeedback>('evaluate_survival', { sit, word, res }).then(r => r.data),
 
   getWordDefinition: (word: string, context: string) =>
-    callAI<{ data: string }>('quick_def', { word, context }).then(r => r.data),
+    callAI<string>('quick_def', { word, context }).then(r => r.data),
 };

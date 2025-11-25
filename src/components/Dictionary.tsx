@@ -11,7 +11,7 @@ const isLatinScript = (text: string): boolean => {
   return LATIN_REGEX.test(text);
 };
 
-const VocabBuilder: FC = () => {
+const Dictionary: FC = () => {
   const [word, setWord] = useState('');
   const [data, setData] = useState<VocabResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,7 +33,7 @@ const VocabBuilder: FC = () => {
         setData(result);
       }
     } catch (err) {
-      console.error("VocabBuilder Fetch Error:", err);
+      console.error("Dictionary Fetch Error:", err);
       setErrorMsg("Terjadi kesalahan koneksi. Silakan coba lagi.");
     } finally {
       setLoading(false);
@@ -235,4 +235,4 @@ const VocabBuilder: FC = () => {
   );
 };
 
-export default VocabBuilder;
+export default Dictionary;

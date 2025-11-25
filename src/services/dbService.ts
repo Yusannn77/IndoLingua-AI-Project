@@ -1,7 +1,16 @@
 import { SavedVocab, HistoryItem, DailyProgress } from '@/types';
 
-// Interface lokal untuk mapping respon API (Raw JSON)
-// Karena via HTTP, Date akan menjadi string 'createdAt'
+// Interface internal untuk menangkap respons mentah dari API
+// (Karena API mengembalikan 'createdAt' string, bukan 'timestamp' number)
+interface VocabApiResponse {
+  id: string;
+  word: string;
+  translation: string;
+  originalSentence: string;
+  mastered: boolean;
+  createdAt: string; // Ini yang bikin masalah jika tidak di-convert
+}
+
 interface HistoryApiResponse {
   id: string;
   feature: string;
@@ -16,7 +25,19 @@ export const DBService = {
   async getVocabs(): Promise<SavedVocab[]> {
     const res = await fetch('/api/vocab');
     if (!res.ok) return [];
-    return res.json();
+    
+    const data: VocabApiResponse[] = await res.json();
+    
+    // [CRITICAL FIX] Transformasi Data: createdAt (String) -> timestamp (Number)
+    return data.map(item => ({
+      id: item.id,
+      word: item.word,
+      originalSentence: item.originalSentence,
+      translation: item.translation,
+      mastered: item.mastered,
+      // Kita konversi string tanggal ke angka (epoch time) agar bisa di-sort
+      timestamp: new Date(item.createdAt).getTime()
+    }));
   },
 
   async addVocab(vocab: Omit<SavedVocab, 'id' | 'mastered' | 'timestamp'>): Promise<SavedVocab | null> {
@@ -26,7 +47,18 @@ export const DBService = {
       body: JSON.stringify(vocab),
     });
     if (!res.ok) return null;
-    return res.json();
+    
+    const item: VocabApiResponse = await res.json();
+    
+    // [CRITICAL FIX] Transformasi data untuk item baru juga
+    return {
+      id: item.id,
+      word: item.word,
+      originalSentence: item.originalSentence,
+      translation: item.translation,
+      mastered: item.mastered,
+      timestamp: new Date(item.createdAt).getTime()
+    };
   },
 
   async toggleVocabMastery(id: string, mastered: boolean): Promise<boolean> {
@@ -48,27 +80,24 @@ export const DBService = {
     const res = await fetch('/api/history');
     if (!res.ok) return [];
     
-    // FIXED: Menggunakan Typed Interface alih-alih 'any'
     const data = await res.json() as HistoryApiResponse[];
     
-    // Mapping aman dari string date ke Object Date
     return data.map((d) => ({
       id: d.id,
       feature: d.feature,
       details: d.details,
-      source: d.source as 'API' | 'CACHE', // Type casting aman untuk Union Type
+      source: d.source as 'API' | 'CACHE',
       tokens: d.tokens,
       timestamp: new Date(d.createdAt)
     }));
   },
 
   async logHistory(item: Omit<HistoryItem, 'id' | 'timestamp'>): Promise<void> {
-    // Fire and forget
     fetch('/api/history', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(item),
-    });
+    }).catch(err => console.error("Log failed", err));
   },
 
   // --- DAILY CHALLENGE ---

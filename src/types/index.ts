@@ -1,3 +1,6 @@
+// src/types/index.ts
+
+// --- Enums & Literals ---
 export enum AppView {
   DASHBOARD = 'DASHBOARD',
   VOCAB = 'VOCAB',
@@ -8,6 +11,10 @@ export enum AppView {
   HOME = 'HOME'
 }
 
+export type LabMode = 'STORY' | 'FLASHCARD' | 'RECALL' | 'HISTORY';
+
+// --- Interfaces ---
+
 export interface HistoryItem {
   id: string;
   timestamp: Date;
@@ -17,18 +24,18 @@ export interface HistoryItem {
   tokens?: number;
 }
 
-export interface TranslationResult {
-  translation: string;
-  explanation: string;
-  variations: string[];
-}
-
 export interface VocabResult {
   word: string;
   meaning: string;
   context_usage: string;
   nuance_comparison: string;
   synonyms: string[];
+}
+
+export interface TranslationResult {
+  translation: string;
+  explanation: string;
+  variations: string[];
 }
 
 export interface GrammarQuestion {
@@ -45,7 +52,8 @@ export interface ChallengeFeedback {
   improved_response: string;
 }
 
-// --- STORY LAB ---
+// --- Story Lab Specific ---
+
 export interface StoryScenario {
   sentence: string;
   translation: string;
@@ -60,12 +68,24 @@ export interface SavedVocab {
   timestamp: number;
 }
 
-// --- DAILY CHALLENGE & SURVIVAL ---
+export interface VocabRecommendation {
+  text: string;
+  type: 'word' | 'phrase';
+  translation: string;
+}
+
+export interface CachedAnalysis {
+  timestamp: number;
+  recommendations: VocabRecommendation[];
+}
+
+// --- Daily Challenge & Survival ---
+
 export interface DailyProgress {
-  date: string; // Format YYYY-MM-DD
-  targets: string[]; // 10 kata target
-  memorized: string[]; // Kata yang sudah di-checklist
-  completed: string[]; // Kata yang sudah lulus survival
+  date: string; 
+  targets: string[];
+  memorized: string[];
+  completed: string[];
   meanings: Record<string, string>;
 }
 

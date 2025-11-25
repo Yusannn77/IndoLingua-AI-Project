@@ -5,10 +5,10 @@ import {
   ChallengeFeedback,
   StoryScenario,
   SurvivalScenario,
-  HistoryItem
+  VocabRecommendation
 } from "../types";
 
-// --- CORE FETCH FUNCTION ---
+// Core Fetch Wrapper (Type Safe)
 async function callAI<T>(feature: string, params: Record<string, unknown>): Promise<{ data: T; tokens: number }> {
   const res = await fetch('/api/ai/generate', {
     method: 'POST',
@@ -23,63 +23,46 @@ async function callAI<T>(feature: string, params: Record<string, unknown>): Prom
   return await res.json();
 }
 
-// --- LOGGING KE DATABASE ---
 const logHistoryToDB = (feature: string, details: string, source: 'API' | 'CACHE', tokens = 0) => {
-  // Fire-and-forget fetch request ke API History
   fetch('/api/history', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      feature,
-      details,
-      source,
-      tokens
-    }),
-  }).catch(err => console.error("Failed to log history:", err));
+    body: JSON.stringify({ feature, details, source, tokens }),
+  }).catch((err: unknown) => console.error("Log failed:", err));
 };
 
-// --- TELEMETRY WRAPPER ---
 async function withTelemetry<T>(
   feature: string,
   cacheKey: string | null,
   logInfo: string,
   fn: () => Promise<{ data: T; tokens: number }>
 ): Promise<T> {
-  // 1. Call API
   const { data, tokens } = await fn();
-
-  // 2. Log ke Database
   logHistoryToDB(feature, logInfo, "API", tokens);
-
   return data;
 }
 
-// --- EXPORTED SERVICE ---
 export const GeminiService = {
-  // 🟢 FITUR BARU: Batch Definition (Solusi Error 429)
-  // Mengambil arti banyak kata sekaligus dalam 1 request
   getBatchWordDefinitions: (words: string[]) =>
     withTelemetry<{ definitions: { word: string; meaning: string }[] }>(
-      "Vocab Batch", 
-      null, 
-      `Batch translate ${words.length} words`, 
+      "Vocab Batch", null, `Batch translate ${words.length} words`, 
       () => callAI('batch_vocab_def', { words })
     ),
 
   translateAndExplain: (text: string) => 
-    withTelemetry<TranslationResult>("Translator", null, `Translate: ${text.substring(0,20)}...`, 
+    withTelemetry<TranslationResult>("Translator", null, `Translate text`, 
       () => callAI('translate', { text })),
 
   explainVocab: (word: string) => 
-    withTelemetry<VocabResult>("Vocab Builder", null, `Mencari kata: "${word}"`, 
+    withTelemetry<VocabResult>("Vocab Builder", null, `Explain: "${word}"`, 
       () => callAI('explain_vocab', { word })),
 
   generateGrammarQuestion: (level: 'beginner' | 'intermediate') =>
-    withTelemetry<GrammarQuestion>("Grammar", null, `Soal Grammar (${level})`, 
+    withTelemetry<GrammarQuestion>("Grammar", null, `Question (${level})`, 
       () => callAI('grammar_question', { level })),
 
   evaluateChallengeResponse: (scenario: string, phrase: string, user: string) =>
-    withTelemetry<ChallengeFeedback>("Challenge", null, "Evaluasi Tantangan", 
+    withTelemetry<ChallengeFeedback>("Challenge", null, "Eval Challenge", 
       () => callAI('evaluate_challenge', { scenario, phrase, user })),
 
   generateStorySentence: () =>
@@ -87,10 +70,23 @@ export const GeminiService = {
       () => callAI('generate_story', {})),
 
   evaluateStoryTranslation: (orig: string, user: string) =>
-    withTelemetry<ChallengeFeedback>("Story Eval", null, "Evaluasi Story", 
+    withTelemetry<ChallengeFeedback>("Story Eval", null, "Eval Story Translation", 
       () => callAI('evaluate_story', { orig, user })),
 
-  // Helper Wrappers (Tanpa Telemetry berlebih jika dipanggil sub-komponen yang sudah ada logikanya sendiri)
+  analyzeStoryVocab: (sentence: string) =>
+    withTelemetry<{ recommendations: VocabRecommendation[] }>(
+      "Story Analysis", null, "Analyze vocab candidates",
+      () => callAI('analyze_story_vocab', { sentence })
+    ),
+
+  // --- FITUR BARU: EVALUASI RECALL ---
+  evaluateRecall: (word: string, correctAnswer: string, userAnswer: string) =>
+    withTelemetry<{ isCorrect: boolean; feedback: string }>(
+      "Recall Eval", null, `Recall check: ${word}`,
+      () => callAI('evaluate_recall', { word, correctAnswer, userAnswer })
+    ),
+
+  // Helper Wrappers
   generateSurvivalScenario: (word: string) =>
     callAI<SurvivalScenario>('survival_scenario', { word }).then(r => r.data),
 

@@ -1,11 +1,12 @@
 import { GoogleGenAI, Schema, Type } from "@google/genai";
 import { NextResponse } from "next/server";
 
+// Pastikan API Key ada di .env
 const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// --- INTERFACES ---
+// --- INTERFACE PARAMS ---
 interface PromptParams {
-  words?: string[]; // Parameter array untuk batching
+  words?: string[];
   word?: string;
   text?: string;
   level?: string;
@@ -16,128 +17,84 @@ interface PromptParams {
   sit?: string;
   res?: string;
   context?: string;
+  sentence?: string;
+  correctAnswer?: string; // Parameter baru untuk recall
+  userAnswer?: string;    // Parameter baru untuk recall
   [key: string]: unknown;
 }
 
-// Interface untuk hasil parsing JSON yang dinamis namun type-safe
+// --- INTERFACE RESPONSE ---
 interface AIResponseData {
+  recommendations?: Array<{ text: string, type: 'word' | 'phrase', translation: string }>;
+  isCorrect?: boolean;
+  feedback?: string;
   id?: string;
-  definitions?: Array<{word: string, meaning: string}>; // Struktur respon batch
   [key: string]: unknown;
 }
 
 // --- 1. PROMPT FACTORY ---
-const createPrompt = (feature: string, params: PromptParams) => {
+const createPrompt = (feature: string, params: PromptParams): string => {
   switch (feature) {
-    // 🟢 CASE BARU: BATCH VOCAB
     case 'batch_vocab_def':
-      return `
-        Task: Translate the following English words to Indonesian (short & clear meaning).
-        Words: ${params.words?.join(", ")}
-        
-        OUTPUT RULES (JSON):
-        Return an array of objects under "definitions" key.
-        Example: { "definitions": [{"word": "Run", "meaning": "Berlari"}, {"word": "Eat", "meaning": "Makan"}] }
-      `;
+      return `Translate these words to Indonesian: ${params.words?.join(", ")}. JSON Output: { "definitions": [{"word": "...", "meaning": "..."}] }`;
 
     case 'explain_vocab':
-      return `
-        Role: English Teacher for Indonesian Students.
-        Target Word: "${params.word}"
-        
-        TASK:
-        1. Check if "${params.word}" is a valid English word. If NOT, return word="INVALID_SCOPE".
-        2. If VALID, provide explanation targeting Indonesian learners.
-        
-        OUTPUT RULES (JSON):
-        - "word": The English word.
-        - "meaning": Definisi dalam BAHASA INDONESIA.
-        - "context_usage": English sentence + (Terjemahan Indonesia).
-        - "nuance_comparison": Penjelasan nuansa/kegunaan dalam BAHASA INDONESIA.
-        - "synonyms": Array string.
-      `;
+      return `Role: Teacher. Explain "${params.word}" for Indonesian students. JSON Output keys: word, meaning, context_usage, nuance_comparison, synonyms.`;
 
     case 'translate':
-      return `
-        Translate this text to Indonesian naturally: "${params.text}".
-        Also provide a brief grammatical explanation in Indonesian.
-      `;
+      return `Translate to Indonesian: "${params.text}" and explain grammar briefly.`;
 
     case 'grammar_question':
-      return `
-        Generate a multiple-choice English grammar question.
-        Level: ${params.level} (beginner/intermediate).
-        Target Audience: Indonesian students.
-        
-        OUTPUT RULES (JSON):
-        - "question": The question sentence with a blank (___).
-        - "options": Array of 4 possible answers.
-        - "correctIndex": Index of the correct answer (0-3).
-        - "explanation": Penjelasan kenapa jawaban itu benar dalam BAHASA INDONESIA.
-      `;
+      return `Create 1 ${params.level} English grammar question. JSON Output keys: question, options (array), correctIndex, explanation.`;
 
     case 'evaluate_challenge':
-      return `
-        Role: English Tutor.
-        Context: "${params.scenario}"
-        Target Phrase to mimic: "${params.phrase}"
-        User Answer: "${params.user}"
-        
-        TASK: Evaluate accuracy and similarity.
-        OUTPUT RULES (JSON):
-        - "score": 1-10 integer.
-        - "feedback": Saran perbaikan ramah dalam BAHASA INDONESIA.
-        - "improved_response": Contoh jawaban yang lebih natural dalam Bahasa Inggris.
-      `;
+      return `Rate user answer "${params.user}" for phrase "${params.phrase}" in context "${params.scenario}". JSON Output: score (1-10), feedback, improved_response.`;
 
     case 'generate_story':
-      return `
-        Generate a short, evocative English sentence for a language learner.
-        Genre: Random (Romance/Horror/Sci-Fi/Slice of Life).
-        
-        OUTPUT RULES (JSON):
-        - "sentence": The English sentence.
-        - "translation": Terjemahan natural dalam BAHASA INDONESIA.
-      `;
+      return `Write a short evocative English sentence (Romance/Horror/Life). JSON Output: sentence, translation.`;
 
     case 'evaluate_story':
-      return `
-        Original English: "${params.orig}"
-        User Translation: "${params.user}"
-        
-        TASK: Rate the translation accuracy.
-        OUTPUT RULES (JSON):
-        - "score": 1-10 integer.
-        - "feedback": Koreksi detail (mana yang salah/kurang tepat) dalam BAHASA INDONESIA.
-        - "improved_response": Terjemahan Bahasa Indonesia yang seharusnya (Kunci Jawaban).
-      `;
+      return `Compare user translation "${params.user}" with original "${params.orig}". JSON Output: score, feedback, improved_response.`;
 
     case 'survival_scenario':
-      return `
-        Create a high-stakes or urgent scenario where the user MUST use the word "${params.word}".
-        
-        OUTPUT RULES (JSON):
-        - "word": "${params.word}"
-        - "situation": Deskripsi situasi darurat/penting dalam BAHASA INGGRIS (misal: "You are lost in an airport and need to find...").
-      `;
+      return `Create urgent scenario using word "${params.word}". JSON Output: word, situation.`;
 
     case 'evaluate_survival':
-      return `
-        Scenario: "${params.sit}"
-        Target Word: "${params.word}"
-        User Response: "${params.res}"
-        
-        TASK: Did the user solve the problem using the word correctly?
-        OUTPUT RULES (JSON):
-        - "score": 1-10. (Give <5 if target word is missing/wrong context).
-        - "feedback": Evaluasi keberhasilan misi dalam BAHASA INDONESIA.
-        - "improved_response": Contoh kalimat solusi terbaik dalam Bahasa Inggris.
-      `;
+      return `Did user "${params.res}" solve scenario "${params.sit}" with word "${params.word}"? JSON Output: score, feedback, improved_response.`;
 
     case 'quick_def':
+      return `Translate "${params.word}" to Indonesian (Context: "${params.context}"). Output ONLY the word.`;
+
+    // Fitur: Analisis Story (Batch)
+    case 'analyze_story_vocab':
       return `
-        Task: Translate "${params.word}" to Indonesian based on context: "${params.context}".
-        Output ONLY the Indonesian word(s). No explanation.
+        Analyze sentence: "${params.sentence}"
+        Task: Extract useful vocab/phrases for an Indonesian Learner.
+        Filter: Ignore basic words (I, the, a, is). Keep idioms/phrases together.
+        Output JSON: { "recommendations": [{ "text": "...", "type": "word"|"phrase", "translation": "..." }] }
+      `;
+
+    // Fitur Baru: Evaluasi Jawaban Recall (Cerdas)
+    case 'evaluate_recall':
+      return `
+        Role: Indonesian Language Teacher.
+        Task: Check if student's answer implies the same meaning as the correct answer.
+        
+        Target Word: "${params.word}"
+        Correct Meaning: "${params.correctAnswer}"
+        Student Answer: "${params.userAnswer}"
+        
+        Rules:
+        1. Accept synonyms (e.g. "melihat" = "memandang").
+        2. Accept standard/non-standard spelling (e.g. "bernafas" = "bernapas").
+        3. Accept minor typos if meaning is clear.
+        4. Reject if meaning is different.
+        
+        Output JSON: 
+        { 
+          "isCorrect": boolean, 
+          "feedback": "Short explanation in Indonesian (max 10 words)." 
+        }
       `;
 
     default:
@@ -153,7 +110,6 @@ const createSchema = (props: Record<string, Schema>, required: string[]): Schema
 });
 
 const SCHEMAS: Record<string, Schema> = {
-  // 🟢 SCHEMA BARU: Batch Definition
   batch_vocab_def: createSchema({
     definitions: {
       type: Type.ARRAY,
@@ -211,6 +167,27 @@ const SCHEMAS: Record<string, Schema> = {
     feedback: { type: Type.STRING },
     improved_response: { type: Type.STRING }
   }, ["score", "feedback", "improved_response"]),
+
+  analyze_story_vocab: createSchema({
+    recommendations: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          text: { type: Type.STRING },
+          type: { type: Type.STRING, enum: ["word", "phrase"] },
+          translation: { type: Type.STRING }
+        },
+        required: ["text", "type", "translation"]
+      }
+    }
+  }, ["recommendations"]),
+
+  // Schema Baru untuk Recall
+  evaluate_recall: createSchema({
+    isCorrect: { type: Type.BOOLEAN },
+    feedback: { type: Type.STRING }
+  }, ["isCorrect", "feedback"]),
 };
 
 // --- 3. ROUTE HANDLER ---
@@ -224,32 +201,28 @@ export async function POST(req: Request) {
     const prompt = createPrompt(feature, params);
     const schema = SCHEMAS[feature];
 
+    // Menggunakan Model Stabil: gemini-1.5-flash
     const response = await client.models.generateContent({
-      // 🟢 MODEL UPDATE: Menggunakan model Flash Lite 2.5 sesuai permintaan
       model: 'gemini-2.5-flash-lite', 
       contents: prompt,
       config: {
         responseMimeType: schema ? "application/json" : "text/plain",
         responseSchema: schema,
+        temperature: 0.3,
       }
     });
 
-    // Fix: Ambil text secara manual dari struktur candidates
     const text = response.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    
-    let data: unknown = text; // Defaultnya string/raw text
+    let data: unknown = text;
 
     if (schema) {
       try {
-        // Parsing JSON dengan aman
         const parsedData = JSON.parse(text) as AIResponseData;
-        
         if (feature === 'grammar_question' && !parsedData.id) {
           parsedData.id = Date.now().toString();
         }
-        
         data = parsedData;
-      } catch (e: unknown) {
+      } catch (e) {
         console.error("JSON Parse Error:", text);
         return NextResponse.json({ error: "Invalid AI JSON output" }, { status: 500 });
       }
@@ -263,13 +236,17 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     console.error("AI Controller Error:", error);
     
-    const errorMessage = error instanceof Error ? error.message : "Unknown Server Error";
-    
-    // Handle 429 khusus untuk memberi info lebih jelas di frontend
-    if (errorMessage.includes("429")) {
-      return NextResponse.json({ error: "Quota Exceeded. Try again in a minute." }, { status: 429 });
+    let msg = "Unknown Error";
+    let status = 500;
+
+    if (error instanceof Error) {
+      msg = error.message;
+      if (msg.includes("503") || msg.includes("429") || msg.includes("Overloaded")) {
+        msg = "AI sedang sibuk (Overloaded). Silakan coba lagi nanti.";
+        status = 503;
+      }
     }
     
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status });
   }
 }

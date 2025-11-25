@@ -9,55 +9,58 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// --- TABEL 1: KOSAKATA (Flashcard) ---
-// Menggantikan penyimpanan di LocalStorage 'indolingua_vocab_v1'
 model Vocab {
   id               String   @id @default(cuid())
   word             String
   translation      String
-  originalSentence String   // Konteks kalimat asli
-  mastered         Boolean  @default(false) // Status hafalan
+  originalSentence String   
+  mastered         Boolean  @default(false)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+
+  @@index([createdAt]) // Optimasi untuk "Order By Newest"
+  @@index([word])      // Optimasi untuk pencarian/duplikasi
 }
 
-// --- TABEL 2: RIWAYAT (History) ---
-// Untuk mencatat penggunaan Token AI agar terpantau
 model History {
   id        String   @id @default(cuid())
-  feature   String   // Misal: "Vocab Builder", "Story Lab"
-  details   String   // Misal: "Mencari kata: run"
-  source    String   // 'API' atau 'CACHE'
+  feature   String   
+  details   String   
+  source    String   
   tokens    Int      @default(0)
   createdAt DateTime @default(now())
+
+  @@index([createdAt]) // Critical untuk Dashboard History Log
 }
 
-// --- TABEL 3: MISI HARIAN (Daily Challenge) ---
 model DailyProgress {
   id        String   @id @default(cuid())
-  date      String   @unique // Format: "2023-10-27"
-  targets   String[] // Daftar 10 kata
+  date      String   @unique 
+  targets   String[] 
   memorized String[] 
   completed String[] 
   meanings  Json     @default("{}") 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([date]) // Lookup harian lebih cepat
 }
 
-// TABEL BARU UNTUK DATA STATIS
 model Story {
   id        Int      @id @default(autoincrement())
   english   String
-  source    String   // Genre: "Romance", "Horror"
+  source    String   
   createdAt DateTime @default(now())
 }
 
 model GrammarQuestion {
   id           String   @id @default(cuid())
   question     String
-  options      String[] // Array string (Postgres supports this)
+  options      String[] 
   correctIndex Int
   explanation  String
-  difficulty   String   // 'beginner' | 'intermediate'
+  difficulty   String   
   createdAt    DateTime @default(now())
+
+  @@index([difficulty]) // Optimasi filter level soal
 }

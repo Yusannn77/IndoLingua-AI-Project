@@ -33,13 +33,13 @@ model History {
 }
 
 // --- TABEL 3: MISI HARIAN (Daily Challenge) ---
-// Menyimpan progress tantangan harian user
 model DailyProgress {
   id        String   @id @default(cuid())
-  date      String   @unique // Format: "2023-10-27" (Unique agar 1 hari cuma 1 record)
-  targets   String[] // Array kata target hari ini
-  memorized String[] // Array kata yang sudah dihafal
-  completed String[] // Array kata yang sudah lulus survival mode
+  date      String   @unique // Format: "2023-10-27"
+  targets   String[] // Daftar 10 kata
+  memorized String[] 
+  completed String[] 
+  meanings  Json     @default("{}") 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

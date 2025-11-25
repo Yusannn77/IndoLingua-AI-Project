@@ -13,6 +13,7 @@ export async function GET(request: Request) {
     });
     return NextResponse.json(progress || null);
   } catch (error) {
+    console.error("Error fetching daily:", error);
     return NextResponse.json({ error: 'Error fetching daily progress' }, { status: 500 });
   }
 }
@@ -20,27 +21,30 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { date, targets, memorized, completed } = body;
+    const { date, targets, memorized, completed, meanings } = body;
 
-    // Upsert: Create kalau belum ada, Update kalau sudah ada
+    // Validasi meanings agar tidak undefined
+    const meaningsToSave = meanings && typeof meanings === 'object' ? meanings : {};
+
     const progress = await prisma.dailyProgress.upsert({
       where: { date },
       update: {
         memorized,
-        completed
-        // Targets biasanya tidak berubah setelah digenerate hari itu
+        completed,
+        meanings: meaningsToSave // Pastikan ini di-passing
       },
       create: {
         date,
         targets,
         memorized: [],
-        completed: []
+        completed: [],
+        meanings: meaningsToSave
       }
     });
 
     return NextResponse.json(progress);
   } catch (error) {
-    console.error(error);
+    console.error("Error saving progress:", error);
     return NextResponse.json({ error: 'Error saving progress' }, { status: 500 });
   }
 }

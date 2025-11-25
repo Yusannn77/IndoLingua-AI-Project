@@ -5,6 +5,7 @@ const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // --- INTERFACES ---
 interface PromptParams {
+  words?: string[]; // Parameter array untuk batching
   word?: string;
   text?: string;
   level?: string;
@@ -15,18 +16,30 @@ interface PromptParams {
   sit?: string;
   res?: string;
   context?: string;
-  [key: string]: string | undefined;
+  [key: string]: unknown;
 }
 
 // Interface untuk hasil parsing JSON yang dinamis namun type-safe
 interface AIResponseData {
   id?: string;
+  definitions?: Array<{word: string, meaning: string}>; // Struktur respon batch
   [key: string]: unknown;
 }
 
 // --- 1. PROMPT FACTORY ---
 const createPrompt = (feature: string, params: PromptParams) => {
   switch (feature) {
+    // 🟢 CASE BARU: BATCH VOCAB
+    case 'batch_vocab_def':
+      return `
+        Task: Translate the following English words to Indonesian (short & clear meaning).
+        Words: ${params.words?.join(", ")}
+        
+        OUTPUT RULES (JSON):
+        Return an array of objects under "definitions" key.
+        Example: { "definitions": [{"word": "Run", "meaning": "Berlari"}, {"word": "Eat", "meaning": "Makan"}] }
+      `;
+
     case 'explain_vocab':
       return `
         Role: English Teacher for Indonesian Students.
@@ -140,6 +153,21 @@ const createSchema = (props: Record<string, Schema>, required: string[]): Schema
 });
 
 const SCHEMAS: Record<string, Schema> = {
+  // 🟢 SCHEMA BARU: Batch Definition
+  batch_vocab_def: createSchema({
+    definitions: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          word: { type: Type.STRING },
+          meaning: { type: Type.STRING }
+        },
+        required: ["word", "meaning"]
+      }
+    }
+  }, ["definitions"]),
+
   explain_vocab: createSchema({
     word: { type: Type.STRING },
     meaning: { type: Type.STRING },
@@ -197,7 +225,8 @@ export async function POST(req: Request) {
     const schema = SCHEMAS[feature];
 
     const response = await client.models.generateContent({
-      model: 'gemini-2.0-flash',
+      // 🟢 MODEL UPDATE: Menggunakan model Flash Lite 2.5 sesuai permintaan
+      model: 'gemini-2.5-flash-lite', 
       contents: prompt,
       config: {
         responseMimeType: schema ? "application/json" : "text/plain",
@@ -215,7 +244,6 @@ export async function POST(req: Request) {
         // Parsing JSON dengan aman
         const parsedData = JSON.parse(text) as AIResponseData;
         
-        // FIXED: Menghindari 'any' dengan menggunakan interface AIResponseData
         if (feature === 'grammar_question' && !parsedData.id) {
           parsedData.id = Date.now().toString();
         }
@@ -236,6 +264,11 @@ export async function POST(req: Request) {
     console.error("AI Controller Error:", error);
     
     const errorMessage = error instanceof Error ? error.message : "Unknown Server Error";
+    
+    // Handle 429 khusus untuk memberi info lebih jelas di frontend
+    if (errorMessage.includes("429")) {
+      return NextResponse.json({ error: "Quota Exceeded. Try again in a minute." }, { status: 429 });
+    }
     
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

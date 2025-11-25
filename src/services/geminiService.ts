@@ -23,7 +23,7 @@ async function callAI<T>(feature: string, params: Record<string, unknown>): Prom
   return await res.json();
 }
 
-// --- LOGGING KE DATABASE (BUKAN LOCALSTORAGE LAGI) ---
+// --- LOGGING KE DATABASE ---
 const logHistoryToDB = (feature: string, details: string, source: 'API' | 'CACHE', tokens = 0) => {
   // Fire-and-forget fetch request ke API History
   fetch('/api/history', {
@@ -41,11 +41,11 @@ const logHistoryToDB = (feature: string, details: string, source: 'API' | 'CACHE
 // --- TELEMETRY WRAPPER ---
 async function withTelemetry<T>(
   feature: string,
-  cacheKey: string | null, // Cache key bisa kita abaikan dulu atau implementasi Redis nanti
+  cacheKey: string | null,
   logInfo: string,
   fn: () => Promise<{ data: T; tokens: number }>
 ): Promise<T> {
-  // 1. Call API (Langsung tembak API dulu untuk sekarang, bypass cache client-side yang rumit)
+  // 1. Call API
   const { data, tokens } = await fn();
 
   // 2. Log ke Database
@@ -56,10 +56,16 @@ async function withTelemetry<T>(
 
 // --- EXPORTED SERVICE ---
 export const GeminiService = {
-  // Fitur ini dihapus dari sini karena sekarang tanggung jawab DBService
-  // getHistory: ... 
-  // getTotalTokens: ...
-  
+  // 🟢 FITUR BARU: Batch Definition (Solusi Error 429)
+  // Mengambil arti banyak kata sekaligus dalam 1 request
+  getBatchWordDefinitions: (words: string[]) =>
+    withTelemetry<{ definitions: { word: string; meaning: string }[] }>(
+      "Vocab Batch", 
+      null, 
+      `Batch translate ${words.length} words`, 
+      () => callAI('batch_vocab_def', { words })
+    ),
+
   translateAndExplain: (text: string) => 
     withTelemetry<TranslationResult>("Translator", null, `Translate: ${text.substring(0,20)}...`, 
       () => callAI('translate', { text })),
@@ -84,18 +90,13 @@ export const GeminiService = {
     withTelemetry<ChallengeFeedback>("Story Eval", null, "Evaluasi Story", 
       () => callAI('evaluate_story', { orig, user })),
 
+  // Helper Wrappers (Tanpa Telemetry berlebih jika dipanggil sub-komponen yang sudah ada logikanya sendiri)
   generateSurvivalScenario: (word: string) =>
-    withTelemetry<SurvivalScenario>("Survival", null, `Misi Survival: ${word}`, 
-      () => callAI('survival_scenario', { word })),
+    callAI<SurvivalScenario>('survival_scenario', { word }).then(r => r.data),
 
   evaluateSurvivalResponse: (sit: string, word: string, res: string) =>
-    withTelemetry<ChallengeFeedback>("Survival Eval", null, "Evaluasi Misi", 
-      () => callAI('evaluate_survival', { sit, word, res })),
+    callAI<ChallengeFeedback>('evaluate_survival', { sit, word, res }).then(r => r.data),
 
   getWordDefinition: (word: string, context: string) =>
-    withTelemetry<string>("Smart Dictionary", null, `Definisi: ${word}`, async () => {
-      const res = await callAI<{ data: string }>('quick_def', { word, context });
-      // Casting aman
-      return { data: res.data as unknown as string, tokens: res.tokens };
-    }),
+    callAI<{ data: string }>('quick_def', { word, context }).then(r => r.data),
 };

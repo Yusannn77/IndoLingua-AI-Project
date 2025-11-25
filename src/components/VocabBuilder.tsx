@@ -52,7 +52,9 @@ const VocabBuilder: FC = () => {
       return;
     }
 
+    // Update input field jika pencarian berasal dari klik tombol sinonim/suggest
     if (keyword) setWord(keyword);
+    
     executeSearch(sanitizedInput);
   };
 
@@ -139,11 +141,18 @@ const VocabBuilder: FC = () => {
             </div>
             
             <div className="flex flex-col md:items-end gap-3 w-full md:w-auto">
+                {/* BAGIAN SINONIM YANG SEKARANG BISA DIKLIK */}
                 <div className="flex flex-wrap gap-2 justify-end">
                   {data.synonyms.map((syn, i) => (
-                      <span key={i} className="px-3 py-1 bg-slate-100 text-slate-600 text-sm rounded-full font-medium border border-slate-200">
-                      {syn}
-                      </span>
+                      <button 
+                        key={i} 
+                        onClick={() => handleSearch(undefined, syn)}
+                        disabled={loading}
+                        className="px-3 py-1 bg-slate-100 text-slate-600 text-sm rounded-full font-medium border border-slate-200 hover:bg-blue-100 hover:text-blue-700 hover:border-blue-300 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                        title={`Cari arti kata "${syn}"`}
+                      >
+                        {syn}
+                      </button>
                   ))}
                 </div>
                 

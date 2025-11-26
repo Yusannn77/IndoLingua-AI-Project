@@ -5,10 +5,11 @@ import {
   ChallengeFeedback,
   StoryScenario,
   SurvivalScenario,
-  VocabRecommendation
+  VocabRecommendation,
+  GrammarCheckResult // ✅ Sekarang sudah bisa di-import
 } from "../types";
 
-// Core Fetch Wrapper (Type Safe)
+// Helper Generik
 async function callAI<T>(feature: string, params: Record<string, unknown>): Promise<{ data: T; tokens: number }> {
   const res = await fetch('/api/ai/generate', {
     method: 'POST',
@@ -28,7 +29,7 @@ const logHistoryToDB = (feature: string, details: string, source: 'API' | 'CACHE
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ feature, details, source, tokens }),
-  }).catch((err: unknown) => console.error("Log failed:", err));
+  }).catch(err => console.error("Log failed:", err));
 };
 
 async function withTelemetry<T>(
@@ -50,12 +51,18 @@ export const GeminiService = {
     ),
 
   translateAndExplain: (text: string) => 
-    withTelemetry<TranslationResult>("Translator", null, `Translate text`, 
+    withTelemetry<TranslationResult>("Translator", null, `Translate: ${text.substring(0,20)}...`, 
       () => callAI('translate', { text })),
 
   explainVocab: (word: string) => 
     withTelemetry<VocabResult>("Vocab Builder", null, `Explain: "${word}"`, 
       () => callAI('explain_vocab', { word })),
+
+  // 🔥 Method Baru: Grammar Check 🔥
+  checkGrammar: (sentence: string) =>
+    withTelemetry<GrammarCheckResult>("Grammar Check", null, "Checking grammar",
+      () => callAI('grammar_check', { sentence })
+    ),
 
   generateGrammarQuestion: (level: 'beginner' | 'intermediate') =>
     withTelemetry<GrammarQuestion>("Grammar", null, `Question (${level})`, 
@@ -79,14 +86,12 @@ export const GeminiService = {
       () => callAI('analyze_story_vocab', { sentence })
     ),
 
-  // --- FITUR BARU: EVALUASI RECALL ---
   evaluateRecall: (word: string, correctAnswer: string, userAnswer: string) =>
     withTelemetry<{ isCorrect: boolean; feedback: string }>(
       "Recall Eval", null, `Recall check: ${word}`,
       () => callAI('evaluate_recall', { word, correctAnswer, userAnswer })
     ),
 
-  // Helper Wrappers
   generateSurvivalScenario: (word: string) =>
     callAI<SurvivalScenario>('survival_scenario', { word }).then(r => r.data),
 
@@ -94,5 +99,6 @@ export const GeminiService = {
     callAI<ChallengeFeedback>('evaluate_survival', { sit, word, res }).then(r => r.data),
 
   getWordDefinition: (word: string, context: string) =>
-    callAI<string>('quick_def', { word, context }).then(r => r.data),
+    callAI<{ translation: string }>('quick_def', { word, context })
+      .then(r => r.data.translation),
 };

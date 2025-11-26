@@ -6,18 +6,11 @@ export const useStoryLogic = () => {
   const [savedVocabs, setSavedVocabs] = useState<SavedVocab[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Helper untuk sorting (Terbaru di atas)
-  // Kita asumsikan 'timestamp' atau 'createdAt' (jika ada di tipe FE) digunakan.
-  // Di types.ts, SavedVocab punya 'timestamp: number' (waktu milidetik).
-  const sortVocabs = (list: SavedVocab[]) => {
-    return [...list].sort((a, b) => b.timestamp - a.timestamp);
-  };
-
   const loadVocabs = async () => {
     try {
       const data = await DBService.getVocabs();
-      // Pastikan data dari server di-sort sebelum di-set ke state
-      setSavedVocabs(sortVocabs(data));
+      // Tidak perlu sort di sini, biarkan View yang melakukan sort sesuai kebutuhan
+      setSavedVocabs(data);
     } catch (error) {
       console.error("Failed to load vocabs", error);
     } finally {
@@ -30,21 +23,22 @@ export const useStoryLogic = () => {
   }, []);
 
   const addVocabOptimistic = (newVocab: SavedVocab) => {
-    setSavedVocabs((prev) => {
-      // Tambahkan item baru di paling depan (index 0)
-      // Ini menjamin item terbaru langsung muncul di atas tanpa perlu re-sort full array
-      return [newVocab, ...prev];
-    });
+    setSavedVocabs((prev) => [newVocab, ...prev]);
   };
 
+  // 🔥 PERBAIKAN LOGIC UPDATE 🔥
   const updateVocabMastery = (id: string, mastered: boolean) => {
-    setSavedVocabs((prev) => {
-      const updatedList = prev.map((v) => v.id === id ? { ...v, mastered } : v);
-      // Kita tidak perlu re-sort di sini jika urutan waktu tidak berubah,
-      // tapi jika ingin sangat ketat, bisa gunakan sortVocabs(updatedList).
-      // Untuk performa UI, membiarkan posisi tetap (hanya status berubah) biasanya lebih baik UX-nya.
-      return updatedList;
-    });
+    setSavedVocabs((prev) => 
+      prev.map((v) => 
+        v.id === id 
+          ? { 
+              ...v, 
+              mastered, 
+              updatedAt: Date.now() // Update timestamp agar naik ke atas di History
+            } 
+          : v
+      )
+    );
   };
 
   const deleteVocabOptimistic = (id: string) => {

@@ -1,21 +1,21 @@
 // src/components/story-lab/RecallView.tsx
 import { useState, useEffect, useRef, FC, FormEvent } from 'react';
-import { CheckCircle2, XCircle, ArrowRight, Loader2 } from 'lucide-react'; // Tambah Loader2
-import { SavedVocab, LabMode } from '@/types';
+import { CheckCircle2, XCircle, ArrowRight, Loader2, RotateCcw } from 'lucide-react'; // Tambah RotateCcw
+import { SavedVocab } from '@/types';
 import { DBService } from '@/services/dbService';
-import { GeminiService } from '@/services/geminiService'; // Import AI Service
+import { GeminiService } from '@/services/geminiService';
 
 interface RecallViewProps {
   vocabList: SavedVocab[];
   onUpdateMastery: (id: string, mastered: boolean) => void;
-  onSwitchMode: (mode: LabMode) => void;
+  onSwitchMode: (mode: 'HISTORY') => void;
 }
 
 export const RecallView: FC<RecallViewProps> = ({ vocabList, onUpdateMastery, onSwitchMode }) => {
   const [activeCard, setActiveCard] = useState<SavedVocab | null>(null);
   const [input, setInput] = useState('');
-  const [status, setStatus] = useState<'IDLE' | 'CHECKING' | 'CORRECT' | 'WRONG'>('IDLE'); // Tambah state CHECKING
-  const [feedback, setFeedback] = useState<string>(''); // State untuk feedback AI
+  const [status, setStatus] = useState<'IDLE' | 'CHECKING' | 'CORRECT' | 'WRONG'>('IDLE');
+  const [feedback, setFeedback] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const activeList = vocabList.filter(v => !v.mastered);
@@ -28,6 +28,7 @@ export const RecallView: FC<RecallViewProps> = ({ vocabList, onUpdateMastery, on
       setActiveCard(null);
       return;
     }
+    // Pilih acak
     const random = activeList[Math.floor(Math.random() * activeList.length)];
     setActiveCard(random);
     setTimeout(() => inputRef.current?.focus(), 100);
@@ -42,10 +43,9 @@ export const RecallView: FC<RecallViewProps> = ({ vocabList, onUpdateMastery, on
     e.preventDefault();
     if (!activeCard || !input.trim()) return;
 
-    setStatus('CHECKING'); // Tampilkan loading
+    setStatus('CHECKING');
 
     try {
-      // Panggil AI untuk menilai
       const result = await GeminiService.evaluateRecall(
         activeCard.word,
         activeCard.translation,
@@ -54,17 +54,17 @@ export const RecallView: FC<RecallViewProps> = ({ vocabList, onUpdateMastery, on
 
       if (result.isCorrect) {
         setStatus('CORRECT');
-        setFeedback(result.feedback || "Jawaban tepat!"); // Feedback positif
+        setFeedback(result.feedback || "Jawaban tepat!");
         await DBService.toggleVocabMastery(activeCard.id, true);
         onUpdateMastery(activeCard.id, true);
-        setTimeout(pickCard, 2000); // Delay sedikit lebih lama biar user baca feedback
+        setTimeout(pickCard, 2000);
       } else {
         setStatus('WRONG');
         setFeedback(result.feedback || "Kurang tepat, coba lihat jawaban di bawah.");
       }
     } catch (error) {
       console.error("AI Error:", error);
-      // Fallback manual check jika AI error (biar app tetap jalan)
+      // Fallback manual check
       const simpleCheck = input.toLowerCase().trim() === activeCard.translation.toLowerCase().trim();
       if (simpleCheck) {
         setStatus('CORRECT');
@@ -97,6 +97,15 @@ export const RecallView: FC<RecallViewProps> = ({ vocabList, onUpdateMastery, on
     <div className="max-w-xl mx-auto animate-slide-up">
       <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden relative transition-all">
         <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
+
+        {/* 🔥 TOMBOL REFRESH (NEW) 🔥 */}
+        <button 
+          onClick={pickCard}
+          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all"
+          title="Ganti Soal Lain"
+        >
+          <RotateCcw size={20} />
+        </button>
 
         <div className="p-8 md:p-10">
           <div className="text-center mb-8">
@@ -137,7 +146,6 @@ export const RecallView: FC<RecallViewProps> = ({ vocabList, onUpdateMastery, on
               autoComplete="off"
             />
 
-            {/* BUTTON STATES */}
             {(status === 'IDLE' || status === 'CHECKING') && (
               <button
                 type="submit"

@@ -21,7 +21,8 @@ export default function Sidebar() {
 
   const navItems = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/vocab', label: 'Kamus Kontekstual', icon: BookOpen },
+    // 🔥 UPDATE: URL diubah dari '/vocab' menjadi '/dictionary'
+    { href: '/dictionary', label: 'Kamus Kontekstual', icon: BookOpen },
     { href: '/story', label: 'Story Lab', icon: Sparkles },
     { href: '/grammar', label: 'Latihan Grammar', icon: CheckSquare },
     { href: '/challenge', label: 'Tantangan Harian', icon: Trophy },

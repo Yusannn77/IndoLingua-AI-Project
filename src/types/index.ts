@@ -1,6 +1,3 @@
-// src/types/index.ts
-
-// --- Enums & Literals ---
 export enum AppView {
   DASHBOARD = 'DASHBOARD',
   VOCAB = 'VOCAB',
@@ -12,8 +9,6 @@ export enum AppView {
 }
 
 export type LabMode = 'STORY' | 'FLASHCARD' | 'RECALL' | 'HISTORY';
-
-// --- Interfaces ---
 
 export interface HistoryItem {
   id: string;
@@ -30,6 +25,12 @@ export interface VocabResult {
   context_usage: string;
   nuance_comparison: string;
   synonyms: string[];
+  
+  // Smart Dictionary Fields
+  isTypo?: boolean;
+  isMisconception?: boolean;
+  misconceptionRule?: string;
+  originalInput?: string;
 }
 
 export interface TranslationResult {
@@ -52,8 +53,21 @@ export interface ChallengeFeedback {
   improved_response: string;
 }
 
-// --- Story Lab Specific ---
+// 🔥 TAMBAHAN BARU: Grammar Checker Types 🔥
+export interface GrammarError {
+  original: string;
+  correction: string;
+  type: 'Spelling' | 'Grammar' | 'Tense' | 'Punctuation' | 'Word Order';
+  explanation: string;
+}
 
+export interface GrammarCheckResult {
+  correctedSentence: string;
+  errors: GrammarError[];
+  generalFeedback: string;
+}
+
+// --- Story Lab Types ---
 export interface StoryScenario {
   sentence: string;
   translation: string;
@@ -66,6 +80,7 @@ export interface SavedVocab {
   translation: string;
   mastered: boolean;
   timestamp: number;
+  updatedAt?: number; // Optional untuk backward compatibility
 }
 
 export interface VocabRecommendation {
@@ -79,8 +94,7 @@ export interface CachedAnalysis {
   recommendations: VocabRecommendation[];
 }
 
-// --- Daily Challenge & Survival ---
-
+// --- Daily Challenge Types ---
 export interface DailyProgress {
   date: string; 
   targets: string[];

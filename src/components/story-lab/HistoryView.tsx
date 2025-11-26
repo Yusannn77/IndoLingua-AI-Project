@@ -1,6 +1,5 @@
-// src/components/story-lab/HistoryView.tsx
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BookOpen, CheckCircle2 } from 'lucide-react';
 import { SavedVocab } from '@/types';
 
 const ITEMS_PER_PAGE = 6;
@@ -8,8 +7,18 @@ const ITEMS_PER_PAGE = 6;
 export const HistoryView = ({ vocabList }: { vocabList: SavedVocab[] }) => {
   const [page, setPage] = useState(1);
   
-  // Filter hanya yang sudah mastered
-  const historyList = vocabList.filter(v => v.mastered);
+  // 1. Filter: Ambil yang sudah hafal (Mastered)
+  // 2. Sort: Berdasarkan timestamp (Terbaru di atas)
+  const historyList = vocabList
+    .filter(v => v.mastered)
+    .sort((a, b) => {
+      // Prioritaskan updatedAt, jika tidak ada gunakan timestamp (created at), atau 0
+      const timeA = a.updatedAt || a.timestamp || 0;
+      const timeB = b.updatedAt || b.timestamp || 0;
+      return timeB - timeA; // Descending (Newest First)
+    });
+  
+  // DEFINISI VARIABEL YANG BENAR: totalPages
   const totalPages = Math.ceil(historyList.length / ITEMS_PER_PAGE);
   
   const currentData = historyList.slice(
@@ -22,7 +31,9 @@ export const HistoryView = ({ vocabList }: { vocabList: SavedVocab[] }) => {
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Table Header */}
         <div className="bg-slate-50 border-b border-slate-200 p-4 px-6 flex items-center justify-between">
-          <h3 className="font-bold text-slate-700">Mastered Words</h3>
+          <h3 className="font-bold text-slate-700 flex items-center gap-2">
+            <BookOpen size={18} className="text-blue-500"/> Mastered Words
+          </h3>
           <span className="text-xs font-medium bg-white px-2 py-1 rounded-md border border-slate-200 text-slate-500">
             Total: {historyList.length}
           </span>
@@ -42,7 +53,7 @@ export const HistoryView = ({ vocabList }: { vocabList: SavedVocab[] }) => {
               {currentData.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="p-12 text-center text-slate-400 italic">
-                    No history available yet. Go to Story Mode to learn!
+                    Belum ada kata yang dikuasai. Selesaikan Recall Challenge untuk menambah daftar ini!
                   </td>
                 </tr>
               ) : (
@@ -50,15 +61,19 @@ export const HistoryView = ({ vocabList }: { vocabList: SavedVocab[] }) => {
                   <tr key={vocab.id} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="p-6 align-top">
                       <span className="font-bold text-slate-800 text-lg block">{vocab.word}</span>
-                      <span className="text-[10px] text-green-700 bg-green-100 px-2 py-0.5 rounded-full font-bold inline-block mt-2">
-                        MASTERED
+                      <span className="inline-flex items-center gap-1 text-[10px] text-green-700 bg-green-100 px-2 py-0.5 rounded-full font-bold border border-green-200 mt-1">
+                        <CheckCircle2 size={10} /> MASTERED
+                      </span>
+                      {/* Debug: Tanggal Update */}
+                      <span className="block text-[10px] text-slate-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {new Date(vocab.updatedAt || vocab.timestamp).toLocaleDateString()}
                       </span>
                     </td>
                     <td className="p-6 align-top">
                       <p className="text-slate-700 font-medium leading-relaxed">{vocab.translation}</p>
                     </td>
                     <td className="p-6 align-top">
-                      <p className="text-slate-500 text-sm italic opacity-60 group-hover:opacity-100 transition-opacity leading-relaxed">
+                      <p className="text-slate-500 text-sm italic opacity-70 group-hover:opacity-100 transition-opacity leading-relaxed">
                         &quot;{vocab.originalSentence}&quot;
                       </p>
                     </td>
@@ -73,7 +88,8 @@ export const HistoryView = ({ vocabList }: { vocabList: SavedVocab[] }) => {
         {historyList.length > 0 && (
           <div className="p-4 border-t border-slate-200 flex items-center justify-between bg-slate-50/50">
             <p className="text-sm text-slate-500 pl-2">
-              Page <span className="font-bold text-slate-800">{page}</span> of <span className="font-bold text-slate-800">{totalPages || 1}</span>
+              {/* FIX: Gunakan variabel 'totalPages' yang benar */}
+              Halaman <span className="font-bold text-slate-800">{page}</span> dari <span className="font-bold text-slate-800">{totalPages || 1}</span>
             </p>
             <div className="flex gap-2">
               <button

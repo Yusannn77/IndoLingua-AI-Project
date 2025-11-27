@@ -6,11 +6,21 @@ import {
   StoryScenario,
   SurvivalScenario,
   VocabRecommendation,
-  GrammarCheckResult // ✅ Sekarang sudah bisa di-import
+  GrammarCheckResult
 } from "../types";
 
-// Helper Generik
-async function callAI<T>(feature: string, params: Record<string, unknown>): Promise<{ data: T; tokens: number }> {
+// Helper Interface untuk Response API
+interface AIResponse<T> {
+  data: T;
+  tokens: number;
+}
+
+interface AIErrorResponse {
+  error: string;
+}
+
+// Helper Generic: Memaksa tipe kembalian sesuai T
+async function callAI<T>(feature: string, params: Record<string, unknown>): Promise<AIResponse<T>> {
   const res = await fetch('/api/ai/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -18,13 +28,15 @@ async function callAI<T>(feature: string, params: Record<string, unknown>): Prom
   });
 
   if (!res.ok) {
-    const err = await res.json();
+    const err = (await res.json()) as AIErrorResponse;
     throw new Error(err.error || 'AI Service Failed');
   }
-  return await res.json();
+  
+  // Casting aman karena validasi ada di sisi server (Zod/Schema)
+  return (await res.json()) as AIResponse<T>;
 }
 
-const logHistoryToDB = (feature: string, details: string, source: 'API' | 'CACHE', tokens = 0) => {
+const logHistoryToDB = (feature: string, details: string, source: 'API' | 'CACHE', tokens = 0): void => {
   fetch('/api/history', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -34,9 +46,9 @@ const logHistoryToDB = (feature: string, details: string, source: 'API' | 'CACHE
 
 async function withTelemetry<T>(
   feature: string,
-  cacheKey: string | null,
+  cacheKey: string | null, // Cache logic bisa diimplementasikan di sini jika perlu
   logInfo: string,
-  fn: () => Promise<{ data: T; tokens: number }>
+  fn: () => Promise<AIResponse<T>>
 ): Promise<T> {
   const { data, tokens } = await fn();
   logHistoryToDB(feature, logInfo, "API", tokens);
@@ -44,6 +56,7 @@ async function withTelemetry<T>(
 }
 
 export const GeminiService = {
+  // --- DICTIONARY FEATURE ---
   getBatchWordDefinitions: (words: string[]) =>
     withTelemetry<{ definitions: { word: string; meaning: string }[] }>(
       "Vocab Batch", null, `Batch translate ${words.length} words`, 
@@ -51,34 +64,52 @@ export const GeminiService = {
     ),
 
   translateAndExplain: (text: string) => 
-    withTelemetry<TranslationResult>("Translator", null, `Translate: ${text.substring(0,20)}...`, 
-      () => callAI('translate', { text })),
+    withTelemetry<TranslationResult>(
+      "Translator", null, `Translate: ${text.substring(0,20)}...`, 
+      () => callAI('translate', { text })
+    ),
 
   explainVocab: (word: string) => 
-    withTelemetry<VocabResult>("Vocab Builder", null, `Explain: "${word}"`, 
-      () => callAI('explain_vocab', { word })),
+    withTelemetry<VocabResult>(
+      "Vocab Builder", null, `Explain: "${word}"`, 
+      () => callAI('explain_vocab', { word })
+    ),
 
-  // 🔥 Method Baru: Grammar Check 🔥
+  getWordDefinition: (word: string, context: string) =>
+    callAI<{ translation: string }>('quick_def', { word, context })
+      .then(r => r.data.translation),
+
+  // --- GRAMMAR CHECKER FEATURE ---
   checkGrammar: (sentence: string) =>
-    withTelemetry<GrammarCheckResult>("Grammar Check", null, "Checking grammar",
+    withTelemetry<GrammarCheckResult>(
+      "Grammar Check", null, "Checking grammar sentence",
       () => callAI('grammar_check', { sentence })
     ),
 
   generateGrammarQuestion: (level: 'beginner' | 'intermediate') =>
-    withTelemetry<GrammarQuestion>("Grammar", null, `Question (${level})`, 
-      () => callAI('grammar_question', { level })),
+    withTelemetry<GrammarQuestion>(
+      "Grammar", null, `Question (${level})`, 
+      () => callAI('grammar_question', { level })
+    ),
 
+  // --- STORY & CHALLENGE FEATURES ---
   evaluateChallengeResponse: (scenario: string, phrase: string, user: string) =>
-    withTelemetry<ChallengeFeedback>("Challenge", null, "Eval Challenge", 
-      () => callAI('evaluate_challenge', { scenario, phrase, user })),
+    withTelemetry<ChallengeFeedback>(
+      "Challenge", null, "Eval Challenge", 
+      () => callAI('evaluate_challenge', { scenario, phrase, user })
+    ),
 
   generateStorySentence: () =>
-    withTelemetry<StoryScenario>("Story", null, "Generate Story", 
-      () => callAI('generate_story', {})),
+    withTelemetry<StoryScenario>(
+      "Story", null, "Generate Story", 
+      () => callAI('generate_story', {})
+    ),
 
   evaluateStoryTranslation: (orig: string, user: string) =>
-    withTelemetry<ChallengeFeedback>("Story Eval", null, "Eval Story Translation", 
-      () => callAI('evaluate_story', { orig, user })),
+    withTelemetry<ChallengeFeedback>(
+      "Story Eval", null, "Eval Story Translation", 
+      () => callAI('evaluate_story', { orig, user })
+    ),
 
   analyzeStoryVocab: (sentence: string) =>
     withTelemetry<{ recommendations: VocabRecommendation[] }>(
@@ -92,13 +123,10 @@ export const GeminiService = {
       () => callAI('evaluate_recall', { word, correctAnswer, userAnswer })
     ),
 
+  // Direct calls without telemetry wrapper (Optional)
   generateSurvivalScenario: (word: string) =>
     callAI<SurvivalScenario>('survival_scenario', { word }).then(r => r.data),
 
   evaluateSurvivalResponse: (sit: string, word: string, res: string) =>
     callAI<ChallengeFeedback>('evaluate_survival', { sit, word, res }).then(r => r.data),
-
-  getWordDefinition: (word: string, context: string) =>
-    callAI<{ translation: string }>('quick_def', { word, context })
-      .then(r => r.data.translation),
 };

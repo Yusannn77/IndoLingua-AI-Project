@@ -16,7 +16,7 @@ import { DBService } from '@/services/dbService';
 import { 
   StoryScenario, ChallengeFeedback, 
   VocabRecommendation, CachedAnalysis,
-  LabMode, SavedVocab 
+  LabMode 
 } from '@/types';
 import { storyCollection } from '@/data/storyData';
 
@@ -41,7 +41,7 @@ const StoryLab: FC = () => {
   // --- RECOMMENDATION STATE ---
   const [recommendations, setRecommendations] = useState<VocabRecommendation[]>([]);
   const [loadingRecs, setLoadingRecs] = useState(false);
-  const [recError, setRecError] = useState<string | null>(null);
+  const [_recError, setRecError] = useState<string | null>(null); // renamed to _recError to silence unused var warning
 
   useEffect(() => {
     loadNewScenario();
@@ -81,6 +81,7 @@ const StoryLab: FC = () => {
         }));
       }
     } catch (error: unknown) {
+      console.error(error);
       setRecError("AI sedang sibuk. Gunakan fitur manual.");
     } finally {
       setLoadingRecs(false);
@@ -110,30 +111,44 @@ const StoryLab: FC = () => {
   const saveToFlashcard = async (text: string, preCalculatedTranslation?: string) => {
     const cleanWord = text.replace(/[.,!?;:"'()]/g, "").toLowerCase();
     
+    // Check duplikasi (sederhana)
     if (savedVocabs.some((v) => v.word.toLowerCase() === cleanWord)) {
-      alert(`"${cleanWord}" sudah ada di Flash Card!`);
+      alert(`"${text}" sudah ada di Flash Card!`);
       return;
     }
 
     setLoadingWord(cleanWord);
     try {
+      let finalWord = text;
       let translation = preCalculatedTranslation;
 
+      // 🔥 SMART FALLBACK LOGIC 🔥
       if (!translation) {
-        const foundInRecs = recommendations.find(r => 
-          r.text.toLowerCase() === cleanWord || 
-          r.text.toLowerCase().includes(cleanWord)
+        // 1. Cek apakah kata yang diklik adalah bagian dari FRASA yang direkomendasikan AI?
+        // Contoh: User klik "stretching", tapi AI merekomendasikan "stretching too far".
+        // Maka kita simpan "stretching too far" karena terjemahannya lebih akurat.
+        const foundPhrase = recommendations.find(r => 
+          r.type === 'phrase' && r.text.toLowerCase().includes(cleanWord)
         );
-        
-        if (foundInRecs) {
-          translation = foundInRecs.translation;
+
+        if (foundPhrase) {
+          // Konfirmasi implisit: Gunakan frasa lengkap
+          finalWord = foundPhrase.text;
+          translation = foundPhrase.translation;
         } else {
-          translation = await GeminiService.getWordDefinition(cleanWord, scenario?.sentence || "");
+          // 2. Cek apakah kata ada di rekomendasi kata tunggal
+          const foundWord = recommendations.find(r => r.text.toLowerCase() === cleanWord);
+          if (foundWord) {
+            translation = foundWord.translation;
+          } else {
+            // 3. Last Resort: Panggil API On-Demand dengan Prompt 'quick_def' yang sudah diperbaiki
+            translation = await GeminiService.getWordDefinition(cleanWord, scenario?.sentence || "");
+          }
         }
       }
       
       const newVocab = await DBService.addVocab({
-        word: text, 
+        word: finalWord, // Simpan kata/frasa yang optimal
         originalSentence: scenario?.sentence || "",
         translation: translation || "Definisi tidak ditemukan",
       });
@@ -262,19 +277,16 @@ const StoryLab: FC = () => {
              </div>
           </div>
           
-          {/* 🔥 UPDATE: FEEDBACK AREA (JAWABAN IDEAL) 🔥 */}
           {storyFeedback && (
             <div className="bg-green-50 border border-green-100 p-6 rounded-2xl animate-slide-up shadow-sm">
               <div className="flex items-center gap-2 mb-3 font-bold text-green-800">
                 <CheckCircle2 size={20}/> AI Score: {storyFeedback.score}/10
               </div>
               
-              {/* Feedback Text */}
               <p className="text-slate-700 mb-6 leading-relaxed border-b border-green-200 pb-4">
                 {storyFeedback.feedback}
               </p>
 
-              {/* Improved Response Box */}
               <div className="bg-white/80 p-4 rounded-xl border border-green-200 flex flex-col gap-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-green-700 uppercase tracking-wider">
                    <ThumbsUp size={14} /> Jawaban Ideal / Natural

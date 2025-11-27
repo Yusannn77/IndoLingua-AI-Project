@@ -19,6 +19,7 @@ export interface HistoryItem {
   tokens?: number;
 }
 
+// --- DICTIONARY TYPES (UPDATED) ---
 export interface VocabResult {
   word: string;
   meaning: string;
@@ -30,7 +31,39 @@ export interface VocabResult {
   isTypo?: boolean;
   isMisconception?: boolean;
   misconceptionRule?: string;
+  
+  // NEW: Field for detailed error analysis from AI prompt
+  errorAnalysis?: string; 
+  
   originalInput?: string;
+
+  // Figurative Language Fields
+  category?: 'Literal' | 'Idiom' | 'Metaphor' | 'Proverb' | 'Slang';
+  literal_meaning?: string;
+  figurative_meaning?: string;
+}
+
+export interface SavedVocab {
+  id: string;
+  word: string;
+  originalSentence: string;
+  translation: string;
+  mastered: boolean;
+  timestamp: number;
+  updatedAt?: number;
+}
+
+export interface GrammarError {
+  original: string;
+  correction: string;
+  type: 'Spelling' | 'Grammar' | 'Tense' | 'Punctuation' | 'Word Order';
+  explanation: string;
+}
+
+export interface GrammarCheckResult {
+  correctedSentence: string;
+  errors: GrammarError[];
+  generalFeedback: string;
 }
 
 export interface TranslationResult {
@@ -53,34 +86,9 @@ export interface ChallengeFeedback {
   improved_response: string;
 }
 
-// 🔥 TAMBAHAN BARU: Grammar Checker Types 🔥
-export interface GrammarError {
-  original: string;
-  correction: string;
-  type: 'Spelling' | 'Grammar' | 'Tense' | 'Punctuation' | 'Word Order';
-  explanation: string;
-}
-
-export interface GrammarCheckResult {
-  correctedSentence: string;
-  errors: GrammarError[];
-  generalFeedback: string;
-}
-
-// --- Story Lab Types ---
 export interface StoryScenario {
   sentence: string;
   translation: string;
-}
-
-export interface SavedVocab {
-  id: string;
-  word: string;
-  originalSentence: string;
-  translation: string;
-  mastered: boolean;
-  timestamp: number;
-  updatedAt?: number; // Optional untuk backward compatibility
 }
 
 export interface VocabRecommendation {
@@ -94,7 +102,6 @@ export interface CachedAnalysis {
   recommendations: VocabRecommendation[];
 }
 
-// --- Daily Challenge Types ---
 export interface DailyProgress {
   date: string; 
   targets: string[];

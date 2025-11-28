@@ -1,7 +1,6 @@
 'use client';
 
-// PERBAIKAN: Arahkan import ke folder 'story-lab'
-import StoryLab from "@/components/story-lab/StoryLab";
+import StoryLab from "@/features/story-lab/components/StoryLab"; // <-- Path Baru
 
 export default function StoryPage() {
   return <StoryLab />;

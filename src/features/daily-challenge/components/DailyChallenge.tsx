@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useRef, type FC } from 'react';
 import { Trophy, CheckCircle, Lock, Brain, Target, ArrowRight, RefreshCcw, Star, Zap, Loader2 } from 'lucide-react';
-import { GeminiService } from '@/services/geminiService';
-import { DBService } from '@/services/dbService';
-import { ChallengeFeedback, DailyProgress, SurvivalScenario } from '@/types';
-import { advancedVocabList } from '@/data/advancedVocab';
+// 🔥 FIX: Import dari lokasi Shared baru
+import { GeminiService } from '@/shared/services/geminiService';
+import { DBService } from '@/shared/services/dbService';
+import { ChallengeFeedback, DailyProgress, SurvivalScenario } from '@/shared/types';
+// 🔥 FIX: Import data dari folder fitur lokal
+import { advancedVocabList } from '../data/advancedVocab';
 
 // --- HELPER ---
 const generateDailyMission = (date: string): DailyProgress => ({
@@ -48,7 +50,6 @@ const DailyChallenge: FC = () => {
   const [progress, setProgress] = useState<DailyProgress | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
   
-  // REF untuk mencegah double-fetching di React Strict Mode
   const isFetchingRef = useRef(false);
 
   // UI States
@@ -67,7 +68,6 @@ const DailyChallenge: FC = () => {
     });
   };
 
-  // 1. Initial Load
   useEffect(() => {
     const initData = async () => {
       setIsLoadingData(true);
@@ -81,12 +81,10 @@ const DailyChallenge: FC = () => {
           await DBService.saveDailyProgress(data);
         }
         
-        // Pastikan meanings ada
         if (!data.meanings || typeof data.meanings !== 'object') {
             data.meanings = {};
         }
         
-        console.log("Loaded Data from DB:", data.meanings); // Debugging
         setProgress(data);
       } catch (e) { console.error(e); } 
       finally { setIsLoadingData(false); }
@@ -94,11 +92,8 @@ const DailyChallenge: FC = () => {
     initData();
   }, []);
 
-  // 2. Smart Batch Fetching (Fix Double Call & Fix Persistence)
   useEffect(() => {
     if (!progress || isLoadingData) return;
-    
-    // Cek apakah sedang fetching?
     if (isFetchingRef.current) return;
 
     const missingTargets = progress.targets.filter(word => !progress.meanings?.[word]);
@@ -107,7 +102,7 @@ const DailyChallenge: FC = () => {
 
     const fetchBatch = async () => {
       try {
-        isFetchingRef.current = true; // Lock
+        isFetchingRef.current = true;
         console.log("🔥 Fetching AI Batch for:", missingTargets);
         
         const res = await GeminiService.getBatchWordDefinitions(missingTargets);
@@ -126,7 +121,7 @@ const DailyChallenge: FC = () => {
       } catch (error) {
         console.error("Gagal mengambil arti batch:", error);
       } finally {
-        isFetchingRef.current = false; // Unlock
+        isFetchingRef.current = false;
       }
     };
 
@@ -183,7 +178,6 @@ const DailyChallenge: FC = () => {
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 pb-12 animate-fade-in">
-      {/* Header */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
          <div className="text-center md:text-left">
             <h2 className="text-2xl font-bold text-slate-900 flex items-center justify-center md:justify-start gap-2"><Target className="text-blue-600"/> Misi Harian</h2>
@@ -195,13 +189,11 @@ const DailyChallenge: FC = () => {
          </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex border-b border-slate-200 bg-white rounded-t-xl overflow-hidden">
          <button onClick={() => setTab('VOCAB')} className={`flex-1 py-4 font-bold text-sm border-b-2 ${tab === 'VOCAB' ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-transparent text-slate-500'}`}>1. HAFALAN ({memorizedCount}/10)</button>
          <button onClick={() => setTab('SURVIVAL')} className={`flex-1 py-4 font-bold text-sm border-b-2 ${tab === 'SURVIVAL' ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-transparent text-slate-500'}`}>2. SURVIVAL MODE ({completedCount}/10)</button>
       </div>
 
-      {/* Content */}
       {tab === 'VOCAB' ? (
         <div className="animate-slide-up">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

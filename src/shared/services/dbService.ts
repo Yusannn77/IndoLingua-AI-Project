@@ -1,6 +1,17 @@
-import { SavedVocab, HistoryItem, DailyProgress } from '@/types';
+import { SavedVocab, HistoryItem, DailyProgress } from '@/shared/types';
 
-// Interface Respons Mentah dari API Prisma
+// --- SECURITY CONFIG ---
+const secureFetch = async (url: string, options: RequestInit = {}) => {
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Content-Type': 'application/json',
+      'x-indolingua-secure': 'internal-client-v1'
+    }
+  });
+};
+
 interface VocabApiResponse {
   id: string;
   word: string;
@@ -8,7 +19,7 @@ interface VocabApiResponse {
   originalSentence: string;
   mastered: boolean;
   createdAt: string;
-  updatedAt: string; // Prisma otomatis kirim ini
+  updatedAt: string;
 }
 
 interface HistoryApiResponse {
@@ -24,12 +35,11 @@ export const DBService = {
   // --- VOCAB ---
   async getVocabs(): Promise<SavedVocab[]> {
     try {
-      const res = await fetch('/api/vocab');
+      const res = await secureFetch('/api/vocab');
       if (!res.ok) return [];
       
       const data: VocabApiResponse[] = await res.json();
       
-      // Mapping data
       return data.map(item => ({
         id: item.id,
         word: item.word,
@@ -37,7 +47,7 @@ export const DBService = {
         translation: item.translation,
         mastered: item.mastered,
         timestamp: new Date(item.createdAt).getTime(),
-        updatedAt: new Date(item.updatedAt).getTime() // 🔥 Mapping UpdatedAt
+        updatedAt: new Date(item.updatedAt).getTime()
       }));
     } catch (error) {
       return [];
@@ -46,9 +56,8 @@ export const DBService = {
 
   async addVocab(vocab: Omit<SavedVocab, 'id' | 'mastered' | 'timestamp' | 'updatedAt'>): Promise<SavedVocab | null> {
     try {
-      const res = await fetch('/api/vocab', {
+      const res = await secureFetch('/api/vocab', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vocab),
       });
       if (!res.ok) return null;
@@ -71,9 +80,8 @@ export const DBService = {
 
   async toggleVocabMastery(id: string, mastered: boolean): Promise<boolean> {
     try {
-      const res = await fetch(`/api/vocab?id=${id}`, {
+      const res = await secureFetch(`/api/vocab?id=${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mastered }),
       });
       return res.ok;
@@ -82,7 +90,7 @@ export const DBService = {
 
   async deleteVocab(id: string): Promise<boolean> {
     try {
-      const res = await fetch(`/api/vocab?id=${id}`, { method: 'DELETE' });
+      const res = await secureFetch(`/api/vocab?id=${id}`, { method: 'DELETE' });
       return res.ok;
     } catch (error) { return false; }
   },
@@ -90,7 +98,7 @@ export const DBService = {
   // --- HISTORY ---
   async getHistory(): Promise<HistoryItem[]> {
     try {
-      const res = await fetch('/api/history');
+      const res = await secureFetch('/api/history');
       if (!res.ok) return [];
       const data = await res.json() as HistoryApiResponse[];
       return data.map((d) => ({
@@ -105,9 +113,8 @@ export const DBService = {
   },
 
   async logHistory(item: Omit<HistoryItem, 'id' | 'timestamp'>): Promise<void> {
-    fetch('/api/history', {
+    secureFetch('/api/history', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(item),
     }).catch(err => console.error("Log failed", err));
   },
@@ -115,7 +122,7 @@ export const DBService = {
   // --- DAILY ---
   async getDailyProgress(date: string): Promise<DailyProgress | null> {
     try {
-      const res = await fetch(`/api/daily?date=${date}`);
+      const res = await secureFetch(`/api/daily?date=${date}`);
       if (!res.ok) return null;
       return res.json();
     } catch (error) { return null; }
@@ -123,9 +130,8 @@ export const DBService = {
 
   async saveDailyProgress(progress: DailyProgress): Promise<DailyProgress | null> {
     try {
-      const res = await fetch('/api/daily', {
+      const res = await secureFetch('/api/daily', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(progress),
       });
       if (!res.ok) return null;

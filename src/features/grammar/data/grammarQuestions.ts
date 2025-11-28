@@ -1,4 +1,4 @@
-import { GrammarQuestion } from '../types/index';
+import { GrammarQuestion } from '@/shared/types'; // <-- Path Baru
 
 // --- LEVEL 1: BEGINNER (Dasar-dasar) ---
 export const beginnerQuestions: GrammarQuestion[] = [

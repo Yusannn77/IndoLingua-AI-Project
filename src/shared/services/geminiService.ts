@@ -7,9 +7,11 @@ import {
   SurvivalScenario,
   VocabRecommendation,
   GrammarCheckResult
-} from "../types";
+} from "@/shared/types";
 
-// Helper Interface untuk Response API
+// --- SECURITY CONFIG ---
+const API_SECRET_HEADER = { 'x-indolingua-secure': 'internal-client-v1' };
+
 interface AIResponse<T> {
   data: T;
   tokens: number;
@@ -23,7 +25,10 @@ interface AIErrorResponse {
 async function callAI<T>(feature: string, params: Record<string, unknown>): Promise<AIResponse<T>> {
   const res = await fetch('/api/ai/generate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      ...API_SECRET_HEADER
+    },
     body: JSON.stringify({ feature, params }),
   });
 
@@ -32,21 +37,23 @@ async function callAI<T>(feature: string, params: Record<string, unknown>): Prom
     throw new Error(err.error || 'AI Service Failed');
   }
   
-  // Casting aman karena validasi ada di sisi server (Zod/Schema)
   return (await res.json()) as AIResponse<T>;
 }
 
 const logHistoryToDB = (feature: string, details: string, source: 'API' | 'CACHE', tokens = 0): void => {
   fetch('/api/history', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      ...API_SECRET_HEADER
+    },
     body: JSON.stringify({ feature, details, source, tokens }),
   }).catch(err => console.error("Log failed:", err));
 };
 
 async function withTelemetry<T>(
   feature: string,
-  cacheKey: string | null, // Cache logic bisa diimplementasikan di sini jika perlu
+  cacheKey: string | null, 
   logInfo: string,
   fn: () => Promise<AIResponse<T>>
 ): Promise<T> {
@@ -123,7 +130,6 @@ export const GeminiService = {
       () => callAI('evaluate_recall', { word, correctAnswer, userAnswer })
     ),
 
-  // Direct calls without telemetry wrapper (Optional)
   generateSurvivalScenario: (word: string) =>
     callAI<SurvivalScenario>('survival_scenario', { word }).then(r => r.data),
 

@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, HelpCircle, Loader2, Sparkles, BookOpen } from 'lucide-react';
-import { GeminiService } from '@/services/geminiService';
-import { GrammarQuestion } from '@/types';
-import { beginnerQuestions, intermediateQuestions } from '@/data/grammarQuestions';
+import { GeminiService } from '@/shared/services/geminiService'; // <-- Path Baru
+import { GrammarQuestion } from '@/shared/types'; // <-- Path Baru
+import { beginnerQuestions, intermediateQuestions } from '../data/grammarQuestions'; // <-- Relative Path Baru
 
 const GrammarPractice: React.FC = () => {
   const [question, setQuestion] = useState<GrammarQuestion | null>(null);
@@ -22,17 +22,16 @@ const GrammarPractice: React.FC = () => {
 
     try {
       if (!forceAI) {
-        // OPSI 1: AMBIL DARI DATA LOKAL (GRATIS)
+        // OPSI 1: AMBIL DARI DATA LOKAL
         const dataset = difficulty === 'beginner' ? beginnerQuestions : intermediateQuestions;
         const randomIdx = Math.floor(Math.random() * dataset.length);
         
-        // Simulasi loading sekejap agar transisi UI lebih halus
         await new Promise(r => setTimeout(r, 400));
         
         setQuestion(dataset[randomIdx]);
         setSource('LOCAL');
       } else {
-        // OPSI 2: GENERATE VIA AI (BAYAR TOKEN)
+        // OPSI 2: GENERATE VIA AI
         const q = await GeminiService.generateGrammarQuestion(difficulty);
         setQuestion(q);
         setSource('AI');
@@ -44,7 +43,6 @@ const GrammarPractice: React.FC = () => {
     }
   };
 
-  // Load soal lokal saat pertama kali komponen dibuka atau saat level kesulitan berubah
   useEffect(() => {
     fetchQuestion(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -77,7 +75,6 @@ const GrammarPractice: React.FC = () => {
         </div>
       </div>
 
-      {/* Loading State */}
       {loading && (
         <div className="h-64 flex flex-col items-center justify-center text-slate-400">
           <Loader2 className="animate-spin mb-4" size={32} />
@@ -85,11 +82,9 @@ const GrammarPractice: React.FC = () => {
         </div>
       )}
 
-      {/* Question Card */}
       {!loading && question && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-fade-in">
           <div className="p-6 md:p-8 border-b border-slate-100">
-            {/* Source Badge */}
             <span className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full mb-4 ${source === 'AI' ? 'bg-purple-100 text-purple-600' : 'bg-indigo-50 text-indigo-600'}`}>
                 {source === 'AI' ? <Sparkles size={12}/> : <BookOpen size={12}/>}
                 {source === 'AI' ? 'AI Generated' : 'Bank Soal'}
@@ -100,21 +95,20 @@ const GrammarPractice: React.FC = () => {
             </h3>
           </div>
 
-          {/* Options */}
           <div className="p-6 md:p-8 space-y-3 bg-slate-50/50">
             {question.options.map((option, idx) => {
               let btnClass = "bg-white border-slate-200 hover:border-brand-300 hover:bg-brand-50";
               
               if (showResult) {
                 if (idx === question.correctIndex) {
-                  btnClass = "bg-green-100 border-green-300 text-green-800"; // Jawaban Benar
+                  btnClass = "bg-green-100 border-green-300 text-green-800";
                 } else if (idx === selectedIdx && idx !== question.correctIndex) {
-                  btnClass = "bg-red-100 border-red-300 text-red-800"; // Jawaban Salah User
+                  btnClass = "bg-red-100 border-red-300 text-red-800";
                 } else {
-                  btnClass = "bg-slate-50 border-slate-200 opacity-60"; // Opsi Lain
+                  btnClass = "bg-slate-50 border-slate-200 opacity-60";
                 }
               } else if (idx === selectedIdx) {
-                btnClass = "bg-brand-100 border-brand-400 text-brand-800"; // Terpilih (sebelum result)
+                btnClass = "bg-brand-100 border-brand-400 text-brand-800";
               }
 
               return (
@@ -132,7 +126,6 @@ const GrammarPractice: React.FC = () => {
             })}
           </div>
 
-          {/* Explanation & Next Actions */}
           {showResult && (
             <div className="p-6 md:p-8 bg-indigo-50 border-t border-indigo-100 animate-slide-up">
               <div className="flex items-start gap-3 mb-6">

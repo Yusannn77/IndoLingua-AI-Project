@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, BookOpen, CheckCircle2 } from 'lucide-react';
-import { SavedVocab } from '@/types';
+import { SavedVocab } from '@/shared/types'; // <-- Path Baru
 
 const ITEMS_PER_PAGE = 6;
 

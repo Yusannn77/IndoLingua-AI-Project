@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { generateContentWithRetry } from "@/lib/ai/client";
-import { FeatureRequestSchema, FEATURE_PROMPTS } from "@/lib/ai/features";
+import { generateContentWithRetry } from "@/shared/lib/ai/client";
+import { FeatureRequestSchema, FEATURE_PROMPTS } from "@/shared/lib/ai/features";
 
 export async function POST(req: Request) {
   try {

@@ -1,54 +1,21 @@
-'use client';
-
-// FIXED: Hapus 'React' dari import. Gunakan named imports saja.
-import { useEffect, useState, type FC } from 'react';
-import { DBService } from '@/services/dbService'; 
-import { HistoryItem } from '@/types';
+import { HistoryItem } from '@/shared/types'; // <-- Path Baru
 import { Trophy, Zap, Brain, Activity, Calendar } from 'lucide-react';
 
-const Dashboard: FC = () => {
-  const [stats, setStats] = useState({
-    challengesCompleted: 0, 
-    masteredVocab: 0,
-    monthlyTokens: 0,
-    streak: 0 
-  });
+interface DashboardStats {
+  challengesCompleted: number;
+  masteredVocab: number;
+  monthlyTokens: number;
+  streak: number;
+}
 
-  const [recentActivity, setRecentActivity] = useState<HistoryItem[]>([]);
+interface DashboardProps {
+  stats: DashboardStats;
+  recentActivity: HistoryItem[];
+}
 
-  useEffect(() => {
-    const loadStats = async () => {
-      try {
-        // 1. Load Vocab dari DB
-        const vocabs = await DBService.getVocabs();
-        const masteredCount = vocabs.filter(v => v.mastered).length;
-
-        // 2. Load History dari DB
-        const history = await DBService.getHistory();
-        setRecentActivity(history.slice(0, 5)); // Ambil 5 terakhir
-
-        // 3. Hitung Tokens dari History DB
-        const totalTokens = history.reduce((acc, curr) => acc + (curr.tokens || 0), 0);
-
-        // 4. Hitung Streak (Logic sederhana berdasarkan tanggal unik di history)
-        const uniqueDays = new Set(
-          history.map(h => new Date(h.timestamp).toDateString())
-        );
-
-        setStats({
-          challengesCompleted: 0, // Nanti ambil dari API DailyProgress
-          masteredVocab: masteredCount,
-          monthlyTokens: totalTokens,
-          streak: uniqueDays.size
-        });
-
-      } catch (error) {
-        console.error("Failed to load dashboard data", error);
-      }
-    };
-
-    loadStats();
-  }, []);
+export default function Dashboard({ stats, recentActivity }: DashboardProps) {
+  // Gunakan tanggal dari server atau default untuk menghindari hydration mismatch
+  const todayDate = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-fade-in pb-12">
@@ -61,13 +28,14 @@ const Dashboard: FC = () => {
         <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm">
            <Calendar size={18} className="text-blue-500"/>
            <span className="text-sm font-medium text-slate-600">
-             {new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+             {todayDate}
            </span>
         </div>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Card 1 */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <Trophy size={80} className="text-blue-600" />
@@ -84,6 +52,7 @@ const Dashboard: FC = () => {
            </div>
         </div>
 
+        {/* Card 2 */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <Brain size={80} className="text-purple-600" />
@@ -100,6 +69,7 @@ const Dashboard: FC = () => {
            </div>
         </div>
 
+        {/* Card 3 */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <Zap size={80} className="text-amber-500" />
@@ -139,7 +109,7 @@ const Dashboard: FC = () => {
                     <div className="flex justify-between items-start">
                        <h4 className="font-semibold text-slate-800 text-sm">{item.feature}</h4>
                        <span className="text-xs text-slate-400">
-                          {item.timestamp.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(item.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                        </span>
                     </div>
                     <p className="text-slate-600 text-sm mt-1">{item.details}</p>
@@ -161,6 +131,4 @@ const Dashboard: FC = () => {
       </div>
     </div>
   );
-};
-
-export default Dashboard;
+}

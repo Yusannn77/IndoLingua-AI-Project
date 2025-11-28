@@ -6,9 +6,9 @@ import {
   XCircle, PlusCircle, Check, Info, BookOpenCheck, 
   ArrowRight, Tag, RefreshCcw
 } from 'lucide-react';
-import { GeminiService } from '@/services/geminiService';
-import { DBService } from '@/services/dbService'; 
-import { VocabResult } from '@/types';
+import { GeminiService } from '@/shared/services/geminiService'; // <-- Path Baru
+import { DBService } from '@/shared/services/dbService'; // <-- Path Baru
+import { VocabResult } from '@/shared/types'; // <-- Path Baru
 
 const MAX_CHARS_DICT = 35;
 const isLatinScript = (text: string): boolean => /^[a-zA-Z\s'-.,!?]+$/.test(text);
@@ -123,7 +123,6 @@ const Dictionary: FC = () => {
       {vocabData && !loading && (
         <div className="space-y-6 animate-fade-in">
           
-          {/* --- REDESIGNED ERROR BANNER --- */}
           {(vocabData.isMisconception || vocabData.isTypo) && (
             <div className={`rounded-2xl p-5 border-l-4 shadow-sm animate-slide-up ${
                 vocabData.isMisconception 
@@ -139,14 +138,12 @@ const Dictionary: FC = () => {
                   }
                 </div>
                 <div className="flex-1 space-y-2">
-                  {/* Header: Transformasi Kata */}
                   <div className="flex items-center gap-3 font-mono text-lg">
                     <span className="line-through opacity-60">{originalQuery}</span>
                     <ArrowRight size={18} className="opacity-60" />
                     <span className="font-bold tracking-tight">{vocabData.word}</span>
                   </div>
                   
-                  {/* Body: Penjelasan Elegan (Tanpa Redundansi) */}
                   <p className={`text-sm leading-relaxed ${vocabData.isMisconception ? 'text-violet-800' : 'text-amber-800'}`}>
                     {vocabData.errorAnalysis || (vocabData.isMisconception 
                       ? "Bentuk kata ini kurang tepat secara tata bahasa." 
@@ -157,7 +154,6 @@ const Dictionary: FC = () => {
             </div>
           )}
 
-          {/* Main Card (Definition) */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 md:p-8 flex flex-col md:flex-row justify-between gap-6 relative overflow-hidden group">
              <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors ${isFigurative ? 'bg-purple-500' : 'bg-blue-500'}`}></div>
              <div className="flex-1 space-y-2">
@@ -185,7 +181,6 @@ const Dictionary: FC = () => {
              </div>
           </div>
 
-          {/* Context & Nuance Cards */}
           <div className="grid md:grid-cols-2 gap-4">
              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 hover:bg-white hover:shadow-md transition-all">
                 <div className="flex items-center gap-2 text-amber-600 mb-3 font-bold text-sm uppercase tracking-wide">

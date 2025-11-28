@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { vocabSchema } from '@/lib/validators';
+import { prisma } from '@/shared/lib/prisma';
+import { vocabSchema } from '@/shared/lib/validators';
 import { z } from 'zod';
 
 // 1. GET

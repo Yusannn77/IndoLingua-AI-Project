@@ -7,28 +7,32 @@ import {
   CheckCircle2, ThumbsUp 
 } from 'lucide-react';
 
-import { useStoryLogic } from './useStoryLogic';
+// 🔥 FIX: Import dari struktur fitur baru
+import { useStoryLogic } from '../hooks/useStoryLogic';
 import { RecallView } from './RecallView';
 import { HistoryView } from './HistoryView';
+import { storyCollection } from '../data/storyData';
 
-import { GeminiService } from '@/services/geminiService';
-import { DBService } from '@/services/dbService';
+// 🔥 FIX: Import dari Shared Kernel
+import { GeminiService } from '@/shared/services/geminiService';
+import { DBService } from '@/shared/services/dbService';
 import { 
   StoryScenario, ChallengeFeedback, 
   VocabRecommendation, CachedAnalysis,
   LabMode 
-} from '@/types';
-import { storyCollection } from '@/data/storyData';
+} from '@/shared/types';
 
 const CACHE_DURATION = 24 * 60 * 60 * 1000;
 
 const StoryLab: FC = () => {
   const [mode, setMode] = useState<LabMode>('STORY');
+  
+  // 🔥 UPDATE: Menggunakan Logic Baru yang Robust
   const { 
     savedVocabs, 
-    addVocabOptimistic, 
-    updateVocabMastery, 
-    deleteVocabOptimistic 
+    addVocab,       // <- Fungsi baru (Smart Add)
+    toggleMastery,  // <- Fungsi baru (Smart Toggle)
+    deleteVocab     // <- Fungsi baru (Smart Delete)
   } = useStoryLogic();
 
   // --- STORY STATE ---
@@ -41,7 +45,6 @@ const StoryLab: FC = () => {
   // --- RECOMMENDATION STATE ---
   const [recommendations, setRecommendations] = useState<VocabRecommendation[]>([]);
   const [loadingRecs, setLoadingRecs] = useState(false);
-  const [_recError, setRecError] = useState<string | null>(null); // renamed to _recError to silence unused var warning
 
   useEffect(() => {
     loadNewScenario();
@@ -55,7 +58,6 @@ const StoryLab: FC = () => {
 
   const fetchAndCacheRecommendations = async (sentence: string) => {
     setRecommendations([]);
-    setRecError(null);
     setLoadingRecs(true);
 
     const cacheKey = `vocab_analysis_${btoa(sentence.slice(0, 30))}`;
@@ -82,7 +84,6 @@ const StoryLab: FC = () => {
       }
     } catch (error: unknown) {
       console.error(error);
-      setRecError("AI sedang sibuk. Gunakan fitur manual.");
     } finally {
       setLoadingRecs(false);
     }
@@ -111,7 +112,6 @@ const StoryLab: FC = () => {
   const saveToFlashcard = async (text: string, preCalculatedTranslation?: string) => {
     const cleanWord = text.replace(/[.,!?;:"'()]/g, "").toLowerCase();
     
-    // Check duplikasi (sederhana)
     if (savedVocabs.some((v) => v.word.toLowerCase() === cleanWord)) {
       alert(`"${text}" sudah ada di Flash Card!`);
       return;
@@ -122,50 +122,39 @@ const StoryLab: FC = () => {
       let finalWord = text;
       let translation = preCalculatedTranslation;
 
-      // 🔥 SMART FALLBACK LOGIC 🔥
       if (!translation) {
-        // 1. Cek apakah kata yang diklik adalah bagian dari FRASA yang direkomendasikan AI?
-        // Contoh: User klik "stretching", tapi AI merekomendasikan "stretching too far".
-        // Maka kita simpan "stretching too far" karena terjemahannya lebih akurat.
         const foundPhrase = recommendations.find(r => 
           r.type === 'phrase' && r.text.toLowerCase().includes(cleanWord)
         );
 
         if (foundPhrase) {
-          // Konfirmasi implisit: Gunakan frasa lengkap
           finalWord = foundPhrase.text;
           translation = foundPhrase.translation;
         } else {
-          // 2. Cek apakah kata ada di rekomendasi kata tunggal
           const foundWord = recommendations.find(r => r.text.toLowerCase() === cleanWord);
           if (foundWord) {
             translation = foundWord.translation;
           } else {
-            // 3. Last Resort: Panggil API On-Demand dengan Prompt 'quick_def' yang sudah diperbaiki
             translation = await GeminiService.getWordDefinition(cleanWord, scenario?.sentence || "");
           }
         }
       }
       
-      const newVocab = await DBService.addVocab({
-        word: finalWord, // Simpan kata/frasa yang optimal
+      // 🔥 PANGGIL FUNGSI BARU (Otomatis handle UI update & DB)
+      await addVocab({
+        word: finalWord,
         originalSentence: scenario?.sentence || "",
         translation: translation || "Definisi tidak ditemukan",
       });
 
-      if (newVocab) {
-        addVocabOptimistic(newVocab);
-      }
     } catch (error) { console.error(error); } 
     finally { setLoadingWord(null); }
   };
 
   const handleDeleteVocab = async (id: string, e?: MouseEvent) => {
     e?.stopPropagation();
-    const success = await DBService.deleteVocab(id);
-    if (success) {
-      deleteVocabOptimistic(id);
-    }
+    // 🔥 PANGGIL FUNGSI BARU (Otomatis handle UI update & DB)
+    await deleteVocab(id);
   };
 
   return (
@@ -312,7 +301,7 @@ const StoryLab: FC = () => {
                   <div key={vocab.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative group hover:border-blue-300 transition-all">
                      <div className="flex justify-between items-start mb-2">
                        <h3 className="text-xl font-bold text-blue-600">{vocab.word}</h3>
-                       <button onClick={() => handleDeleteVocab(vocab.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                       <button onClick={(e) => handleDeleteVocab(vocab.id, e)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                          <Trash2 size={16} />
                        </button>
                      </div>
@@ -326,16 +315,16 @@ const StoryLab: FC = () => {
         </div>
       )}
 
-      {/* MODE: RECALL (MODULAR) */}
+      {/* MODE: RECALL */}
       {mode === 'RECALL' && (
         <RecallView 
           vocabList={savedVocabs} 
-          onUpdateMastery={updateVocabMastery}
+          onUpdateMastery={toggleMastery} // 🔥 PASS FUNGSI BARU
           onSwitchMode={(targetMode) => setMode(targetMode)}
         />
       )}
 
-      {/* MODE: HISTORY (MODULAR) */}
+      {/* MODE: HISTORY */}
       {mode === 'HISTORY' && (
         <HistoryView vocabList={savedVocabs} />
       )}

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/shared/lib/prisma'; // <-- Path Baru
 
 export async function GET() {
   try {
     const history = await prisma.history.findMany({
       orderBy: { createdAt: 'desc' },
-      take: 50 // Limit 50 item terakhir
+      take: 50
     });
     return NextResponse.json(history);
   } catch (error) {

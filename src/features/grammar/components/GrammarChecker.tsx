@@ -5,8 +5,8 @@ import {
   Sparkles, AlertTriangle, CheckCircle2, ArrowRight, 
   Eraser, Copy, Check 
 } from 'lucide-react';
-import { GeminiService } from '@/services/geminiService';
-import { GrammarCheckResult } from '@/types';
+import { GeminiService } from '@/shared/services/geminiService'; // <-- Path Baru
+import { GrammarCheckResult } from '@/shared/types'; // <-- Path Baru
 
 const GrammarChecker: FC = () => {
   const [input, setInput] = useState('');
@@ -79,7 +79,6 @@ const GrammarChecker: FC = () => {
           </form>
         </div>
 
-        {/* Loading Skeleton */}
         {loading && (
           <div className="p-8 space-y-4 animate-pulse bg-white">
             <div className="h-8 bg-slate-100 rounded-lg w-3/4"></div>
@@ -88,17 +87,14 @@ const GrammarChecker: FC = () => {
           </div>
         )}
 
-        {/* Error State */}
         {errorMsg && (
           <div className="p-6 text-center text-red-600 bg-red-50">
             <p>{errorMsg}</p>
           </div>
         )}
 
-        {/* Result Section */}
         {result && !loading && (
           <div className="bg-white">
-            {/* Corrected Version */}
             <div className="p-8 bg-gradient-to-br from-purple-600 to-indigo-600 text-white">
               <p className="text-purple-200 text-xs font-bold uppercase tracking-widest mb-4">Saran Perbaikan</p>
               <div className="text-2xl md:text-3xl font-medium font-serif leading-relaxed mb-6">
@@ -115,7 +111,6 @@ const GrammarChecker: FC = () => {
               </div>
             </div>
 
-            {/* Analysis */}
             <div className="p-8">
               <div className="bg-purple-50 border border-purple-100 rounded-2xl p-5 mb-8 flex gap-4 items-start">
                 <div className="p-2 bg-white rounded-full text-purple-600 shadow-sm shrink-0">

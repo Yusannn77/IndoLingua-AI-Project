@@ -1,9 +1,7 @@
-// src/components/story-lab/RecallView.tsx
 import { useState, useEffect, useRef, FC, FormEvent } from 'react';
-import { CheckCircle2, XCircle, ArrowRight, Loader2, RotateCcw } from 'lucide-react'; // Tambah RotateCcw
-import { SavedVocab } from '@/types';
-import { DBService } from '@/services/dbService';
-import { GeminiService } from '@/services/geminiService';
+import { CheckCircle2, XCircle, ArrowRight, Loader2, RotateCcw } from 'lucide-react';
+import { SavedVocab } from '@/shared/types'; // <-- Path Baru
+import { GeminiService } from '@/shared/services/geminiService'; // <-- Path Baru
 
 interface RecallViewProps {
   vocabList: SavedVocab[];
@@ -28,7 +26,6 @@ export const RecallView: FC<RecallViewProps> = ({ vocabList, onUpdateMastery, on
       setActiveCard(null);
       return;
     }
-    // Pilih acak
     const random = activeList[Math.floor(Math.random() * activeList.length)];
     setActiveCard(random);
     setTimeout(() => inputRef.current?.focus(), 100);
@@ -55,8 +52,11 @@ export const RecallView: FC<RecallViewProps> = ({ vocabList, onUpdateMastery, on
       if (result.isCorrect) {
         setStatus('CORRECT');
         setFeedback(result.feedback || "Jawaban tepat!");
-        await DBService.toggleVocabMastery(activeCard.id, true);
+        
+        // 🔥 UPDATE: Panggil satu fungsi saja.
+        // Logic Simpan DB + Optimistic Update sudah ada di parent (useStoryLogic)
         onUpdateMastery(activeCard.id, true);
+        
         setTimeout(pickCard, 2000);
       } else {
         setStatus('WRONG');
@@ -64,10 +64,11 @@ export const RecallView: FC<RecallViewProps> = ({ vocabList, onUpdateMastery, on
       }
     } catch (error) {
       console.error("AI Error:", error);
-      // Fallback manual check
+      // Fallback manual check jika AI gagal/timeout
       const simpleCheck = input.toLowerCase().trim() === activeCard.translation.toLowerCase().trim();
       if (simpleCheck) {
         setStatus('CORRECT');
+        onUpdateMastery(activeCard.id, true); // 🔥 Konsisten panggil fungsi parent
         setTimeout(pickCard, 1500);
       } else {
         setStatus('WRONG');
@@ -98,7 +99,6 @@ export const RecallView: FC<RecallViewProps> = ({ vocabList, onUpdateMastery, on
       <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden relative transition-all">
         <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
 
-        {/* 🔥 TOMBOL REFRESH (NEW) 🔥 */}
         <button 
           onClick={pickCard}
           className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all"

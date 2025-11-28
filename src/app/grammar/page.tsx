@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import GrammarPractice from "@/components/GrammarPractice";
-import GrammarChecker from "@/components/GrammarChecker";
+import GrammarPractice from "@/features/grammar/components/GrammarPractice"; // <-- Path Baru
+import GrammarChecker from "@/features/grammar/components/GrammarChecker";   // <-- Path Baru
 import { CheckSquare, Sparkles } from 'lucide-react';
 
 export default function GrammarPage() {
@@ -16,7 +16,6 @@ export default function GrammarPage() {
           <p className="text-slate-500">Latih kemampuan atau periksa tata bahasa Anda.</p>
         </div>
         
-        {/* Navigation Tabs */}
         <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-sm flex">
           <button
             onClick={() => setActiveTab('PRACTICE')}

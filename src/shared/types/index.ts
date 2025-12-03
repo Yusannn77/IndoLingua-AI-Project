@@ -1,3 +1,5 @@
+// src/shared/types/index.ts
+
 export enum AppView {
   DASHBOARD = 'DASHBOARD',
   VOCAB = 'VOCAB',
@@ -19,40 +21,89 @@ export interface HistoryItem {
   tokens?: number;
 }
 
-// --- DICTIONARY TYPES (UPDATED) ---
+// --- AI RESULT TYPES (Dari Gemini) ---
 export interface VocabResult {
   word: string;
   meaning: string;
   context_usage: string;
   nuance_comparison: string;
   synonyms: string[];
-  
-  // Smart Dictionary Fields
   isTypo?: boolean;
   isMisconception?: boolean;
   misconceptionRule?: string;
-  
-  // NEW: Field for detailed error analysis from AI prompt
   errorAnalysis?: string; 
-  
   originalInput?: string;
-
-  // Figurative Language Fields
   category?: 'Literal' | 'Idiom' | 'Metaphor' | 'Proverb' | 'Slang';
   literal_meaning?: string;
   figurative_meaning?: string;
 }
 
-export interface SavedVocab {
+// --- NEW CORE: DICTIONARY ENTRY (Sesuai Schema Prisma Baru) ---
+export interface DictionaryEntry {
   id: string;
   word: string;
-  originalSentence: string;
-  translation: string;
-  mastered: boolean;
-  timestamp: number;
-  updatedAt?: number;
+  meaning: string;
+  contextUsage: string;
+  nuanceComparison: string;
+  synonyms: string[];
+  
+  // Smart Analysis
+  isTypo: boolean;
+  isMisconception: boolean;
+  errorAnalysis?: string | null;
+  
+  // Figurative
+  category?: string | null;
+  literalMeaning?: string | null;
+  figurativeMeaning?: string | null;
+
+  createdAt: string | Date; // API return string (ISO), DB return Date
 }
 
+export interface Flashcard {
+  id: string;
+  dictionaryEntryId: string;
+  // Include relasi agar UI bisa menampilkan kata & arti
+  dictionaryEntry?: DictionaryEntry; 
+  
+  sourceContext: string | null;
+  sourceType: string; // 'STORY' | 'DICTIONARY' | 'MANUAL'
+
+  // SRS Progress
+  status: 'NEW' | 'LEARNING' | 'REVIEWING' | 'MASTERED';
+  masteryLevel: number;
+  nextReviewDate: string | Date | null;
+  lastReviewedAt: string | Date | null;
+
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+// Payload untuk membuat Flashcard baru dari UI
+export interface CreateFlashcardInput {
+  word: string;
+  meaning: string;
+  contextUsage?: string;
+  sourceType: 'STORY' | 'DICTIONARY' | 'MANUAL';
+}
+
+// Payload untuk membuat Entry baru (tanpa ID dan createdAt)
+export type CreateEntryPayload = Omit<DictionaryEntry, 'id' | 'createdAt'>;
+
+// --- NEW CORE: STORY LAB LOGS ---
+export interface StoryAttempt {
+  id: string;
+  englishText: string;
+  userTranslation: string;
+  aiFeedback: string;
+  score: number;
+  createdAt: string | Date;
+}
+
+// Payload untuk log aktivitas baru
+export type CreateStoryAttemptInput = Omit<StoryAttempt, 'id' | 'createdAt'>;
+
+// --- OTHER FEATURE TYPES ---
 export interface GrammarError {
   original: string;
   correction: string;
@@ -78,6 +129,7 @@ export interface GrammarQuestion {
   options: string[];
   correctIndex: number;
   explanation: string;
+  difficulty: string;
 }
 
 export interface ChallengeFeedback {

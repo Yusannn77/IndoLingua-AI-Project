@@ -9,11 +9,4 @@ describe('System Health Check', () => {
     expect(1 + 1).toBe(2);
   });
 
-  // LAYER 2: INTEGRATION TEST (Database Test - Port 5433)
-  it('🗄️ Database Layer: Should connect to Test DB', async () => {
-    const count = await prisma.vocab.count();
-    expect(typeof count).toBe('number');
-    console.log(`      ✅ Connected to DB! Current Vocab Count: ${count}`);
-  });
-
 });

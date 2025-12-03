@@ -1,115 +1,81 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DBService } from '@/shared/services/dbService'; // <-- Path Baru
-import { SavedVocab } from '@/shared/types'; // <-- Path Baru
+import { DBService } from '@/shared/services/dbService';
+import type { StoryAttempt, CreateStoryAttemptInput, CreateFlashcardInput } from '@/shared/types';
 
 export const useStoryLogic = () => {
-  const [savedVocabs, setSavedVocabs] = useState<SavedVocab[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [historyLogs, setHistoryLogs] = useState<StoryAttempt[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
-  // Load awal tetap diperlukan untuk sinkronisasi pertama
-  const loadVocabs = useCallback(async () => {
+  // --- HISTORY LOGIC (Tetap Sama) ---
+  const fetchHistory = useCallback(async () => {
     try {
-      setIsLoading(true);
-      const data = await DBService.getVocabs();
-      setSavedVocabs(data);
+      setIsLoadingHistory(true);
+      const data = await DBService.getStoryAttempts();
+      setHistoryLogs(data);
     } catch (error) {
-      console.error("Failed to load vocabs", error);
+      console.error("Failed to load story history", error);
+      setHistoryLogs([]);
     } finally {
-      setIsLoading(false);
+      setIsLoadingHistory(false);
     }
   }, []);
 
   useEffect(() => {
-    loadVocabs();
-  }, [loadVocabs]);
+    fetchHistory();
+  }, [fetchHistory]);
 
-  // 1. ADD VOCAB (Optimistic)
-  const addVocab = async (vocabData: Omit<SavedVocab, 'id' | 'mastered' | 'timestamp' | 'updatedAt'>) => {
-    // Buat ID sementara untuk UI immediate feedback
+  const submitTranslationLog = async (payload: CreateStoryAttemptInput) => {
     const tempId = `temp-${Date.now()}`;
-    const optimisticVocab: SavedVocab = {
-      ...vocabData,
+    const optimisticLog: StoryAttempt = {
+      ...payload,
       id: tempId,
-      mastered: false,
-      timestamp: Date.now(),
-      updatedAt: Date.now()
+      createdAt: new Date().toISOString()
+    };
+    setHistoryLogs((prev) => [optimisticLog, ...prev]);
+
+    const success = await DBService.logStoryAttempt(payload);
+    if (success) {
+      fetchHistory();
+    } else {
+      setHistoryLogs((prev) => prev.filter(log => log.id !== tempId));
+      alert("Gagal menyimpan riwayat latihan.");
+    }
+  };
+
+  // --- NEW: FLASHCARD LOGIC (Pengganti addVocab lama) ---
+  const saveWordToFlashcard = async (
+    word: string, 
+    meaning: string, 
+    contextSentence: string
+  ) => {
+    if (!word) return false;
+
+    const payload: CreateFlashcardInput = {
+      word,
+      meaning,
+      contextUsage: contextSentence,
+      sourceType: 'STORY'
     };
 
-    // Update UI duluan
-    setSavedVocabs((prev) => [optimisticVocab, ...prev]);
+    // Panggil Service Flashcard (Bukan DictionaryEntry langsung)
+    const newCard = await DBService.createFlashcard(payload);
 
-    // Panggil Server
-    const saved = await DBService.addVocab(vocabData);
-
-    if (saved) {
-      // Sukses: Ganti item temporary dengan data asli dari server (yang punya ID valid)
-      setSavedVocabs((prev) => 
-        prev.map((v) => (v.id === tempId ? saved : v))
-      );
+    if (newCard) {
+      // Sukses
       return true;
     } else {
-      // Gagal: Rollback (Hapus item temporary tadi)
-      setSavedVocabs((prev) => prev.filter((v) => v.id !== tempId));
-      alert("Gagal menyimpan vocab. Cek koneksi internet.");
+      // Gagal (Mungkin duplikat flashcard atau error lain)
+      // Pesan error detail sebaiknya dihandle oleh caller atau toast
       return false;
     }
   };
 
-  // 2. TOGGLE MASTERY (Optimistic + Rollback)
-  const toggleMastery = async (id: string, mastered: boolean) => {
-    // Simpan state lama untuk jaga-jaga (Rollback)
-    const previousState = savedVocabs.find((v) => v.id === id)?.mastered;
-
-    // Update UI duluan
-    setSavedVocabs((prev) => 
-      prev.map((v) => 
-        v.id === id 
-          ? { ...v, mastered, updatedAt: Date.now() } 
-          : v
-      )
-    );
-
-    // Panggil Server
-    const success = await DBService.toggleVocabMastery(id, mastered);
-
-    if (!success && previousState !== undefined) {
-      // Gagal: Rollback ke status sebelumnya
-      console.error("Sync failed, rolling back...");
-      setSavedVocabs((prev) => 
-        prev.map((v) => 
-          v.id === id 
-            ? { ...v, mastered: previousState } // Kembalikan nilai asli
-            : v
-        )
-      );
-      alert("Gagal update status. Data dikembalikan.");
-    }
-  };
-
-  // 3. DELETE VOCAB (Optimistic + Rollback)
-  const deleteVocab = async (id: string) => {
-    // Simpan item yang mau dihapus untuk Rollback
-    const deletedItem = savedVocabs.find((v) => v.id === id);
-    if (!deletedItem) return;
-
-    // Hapus dari UI duluan
-    setSavedVocabs((prev) => prev.filter((v) => v.id !== id));
-
-    // Panggil Server
-    const success = await DBService.deleteVocab(id);
-
-    if (!success) {
-      // Gagal: Masukkan kembali item yang tadi dihapus
-      setSavedVocabs((prev) => [deletedItem, ...prev]);
-      alert("Gagal menghapus. Data dikembalikan.");
-    }
-  };
-
   return {
-    savedVocabs,
-    isLoading,
-    addVocab,
-    toggleMastery,
-    deleteVocab
+    historyLogs,
+    isLoadingHistory,
+    submitTranslationLog,
+    refreshHistory: fetchHistory,
+    // Expose fungsi baru
+    saveWordToFlashcard 
   };
 };

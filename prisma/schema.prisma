@@ -9,17 +9,65 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Vocab {
-  id               String   @id @default(cuid())
-  word             String
-  translation      String
-  originalSentence String   
-  mastered         Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+model DictionaryEntry {
+  id                String   @id @default(cuid())
+  word              String   @unique // Unik: Satu kata, satu entry
+  meaning           String
+  
+  // Rich Data
+  contextUsage      String   @db.Text 
+  nuanceComparison  String   @db.Text 
+  synonyms          String[]
+  
+  // Flags
+  isTypo            Boolean  @default(false)
+  isMisconception   Boolean  @default(false)
+  errorAnalysis     String?  @db.Text
+  
+  category          String? 
+  literalMeaning    String?
+  figurativeMeaning String?
 
-  @@index([createdAt]) // Optimasi untuk "Order By Newest"
-  @@index([word])      // Optimasi untuk pencarian/duplikasi
+  // Relasi: Satu kata bisa menjadi Flashcard (User Progress)
+  flashcard         Flashcard? 
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([word])
+}
+
+model Flashcard {
+  id                String   @id @default(cuid())
+  dictionaryEntryId String   @unique // Satu kata hanya punya 1 kartu aktif
+  dictionaryEntry   DictionaryEntry @relation(fields: [dictionaryEntryId], references: [id], onDelete: Cascade)
+
+  
+  sourceContext     String?  @db.Text 
+  sourceType        String   // 'STORY', 'DICTIONARY', 'MANUAL'
+
+  status            String   @default("NEW") // 'NEW', 'LEARNING', 'REVIEWING', 'MASTERED'
+  masteryLevel      Int      @default(0)     // 0-5
+  nextReviewDate    DateTime? 
+  lastReviewedAt    DateTime?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([status])
+  @@index([nextReviewDate])
+}
+
+// --- NEW CORE: STORY LAB LOGS (Decoupled) ---
+model StoryAttempt {
+  id              String   @id @default(cuid())
+  englishText     String   @db.Text
+  userTranslation String   @db.Text
+  aiFeedback      String   @db.Text
+  score           Int
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model History {
@@ -30,7 +78,7 @@ model History {
   tokens    Int      @default(0)
   createdAt DateTime @default(now())
 
-  @@index([createdAt]) // Critical untuk Dashboard History Log
+  @@index([createdAt])
 }
 
 model DailyProgress {
@@ -43,7 +91,7 @@ model DailyProgress {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([date]) // Lookup harian lebih cepat
+  @@index([date])
 }
 
 model Story {
@@ -62,5 +110,5 @@ model GrammarQuestion {
   difficulty   String   
   createdAt    DateTime @default(now())
 
-  @@index([difficulty]) // Optimasi filter level soal
+  @@index([difficulty])
 }

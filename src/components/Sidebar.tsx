@@ -12,7 +12,8 @@ import {
   History as HistoryIcon, 
   GraduationCap, 
   Menu, 
-  X 
+  X,
+  Layers // Import icon Layers untuk Flashcard
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -21,8 +22,11 @@ export default function Sidebar() {
 
   const navItems = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-    // 🔥 UPDATE: URL diubah dari '/vocab' menjadi '/dictionary'
     { href: '/dictionary', label: 'Kamus Kontekstual', icon: BookOpen },
+    
+    // --- NEW MENU: FLASH CARD ---
+    { href: '/flashcard', label: 'Flash Card', icon: Layers },
+    
     { href: '/story', label: 'Story Lab', icon: Sparkles },
     { href: '/grammar', label: 'Latihan Grammar', icon: CheckSquare },
     { href: '/challenge', label: 'Tantangan Harian', icon: Trophy },
@@ -56,7 +60,12 @@ export default function Sidebar() {
 
         <nav className="p-4 space-y-1">
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            // Logic active state: Cek apakah pathname dimulai dengan href item
+            // (kecuali dashboard '/' yang harus exact match)
+            const isActive = item.href === '/' 
+              ? pathname === '/' 
+              : pathname.startsWith(item.href);
+
             return (
               <Link
                 key={item.href}
@@ -65,11 +74,11 @@ export default function Sidebar() {
                 className={`
                   w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-sm font-medium
                   ${isActive 
-                    ? 'bg-blue-50 text-blue-700 border-r-4 border-blue-600' 
+                    ? 'bg-indigo-50 text-indigo-700 border-r-4 border-indigo-600' 
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
                 `}
               >
-                <item.icon size={20} />
+                <item.icon size={20} className={isActive ? "text-indigo-600" : "text-slate-400"} />
                 {item.label}
               </Link>
             );

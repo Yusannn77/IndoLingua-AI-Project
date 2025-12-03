@@ -6,9 +6,9 @@ import {
   XCircle, PlusCircle, Check, Info, BookOpenCheck, 
   ArrowRight, Tag, RefreshCcw
 } from 'lucide-react';
-import { GeminiService } from '@/shared/services/geminiService'; // <-- Path Baru
-import { DBService } from '@/shared/services/dbService'; // <-- Path Baru
-import { VocabResult } from '@/shared/types'; // <-- Path Baru
+import { GeminiService } from '@/shared/services/geminiService';
+import { DBService } from '@/shared/services/dbService';
+import { VocabResult, CreateFlashcardInput } from '@/shared/types';
 
 const MAX_CHARS_DICT = 35;
 const isLatinScript = (text: string): boolean => /^[a-zA-Z\s'-.,!?]+$/.test(text);
@@ -61,14 +61,28 @@ const Dictionary: FC = () => {
     }
   };
 
-  const handleSaveVocab = async () => {
+  // --- REFACTORED SAVE LOGIC (FIXED: SAVE TO FLASHCARD) ---
+  const handleSaveFlashcard = async () => {
     if (!vocabData) return;
-    const saved = await DBService.addVocab({
+
+    // Kita gunakan endpoint FLASHCARD, bukan DictionaryEntry langsung.
+    // Backend akan otomatis membuat/menghubungkan DictionaryEntry.
+    const payload: CreateFlashcardInput = {
       word: vocabData.word,
-      translation: vocabData.meaning,
-      originalSentence: vocabData.context_usage
-    });
-    if (saved) setIsSaved(true);
+      meaning: vocabData.meaning,
+      contextUsage: vocabData.context_usage,
+      sourceType: 'DICTIONARY' // Menandakan asal kata
+    };
+
+    // Panggil Service Flashcard
+    const saved = await DBService.createFlashcard(payload);
+    
+    if (saved) {
+      setIsSaved(true);
+    } else {
+      // Kemungkinan error: Kartu sudah ada
+      alert(`Gagal menyimpan "${vocabData.word}". Kemungkinan kartu sudah ada di koleksimu.`);
+    }
   };
 
   const isFigurative = vocabData?.category && vocabData.category !== 'Literal';
@@ -175,7 +189,7 @@ const Dictionary: FC = () => {
                     </button>
                   ))}
                 </div>
-                <button onClick={handleSaveVocab} disabled={isSaved} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-sm ${isSaved ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'}`}>
+                <button onClick={handleSaveFlashcard} disabled={isSaved} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-sm ${isSaved ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'}`}>
                    {isSaved ? <Check size={18}/> : <PlusCircle size={18}/>} {isSaved ? 'Tersimpan' : 'Simpan Flashcard'}
                 </button>
              </div>

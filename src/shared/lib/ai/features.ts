@@ -22,16 +22,17 @@ export const AI_OUTPUT_SCHEMAS = {
   }, ["definitions"]),
 
   explainVocab: createSchema({
-    word: { type: Type.STRING, description: "The corrected English word (if typo/misconception) or original word." },
-    meaning: { type: Type.STRING, description: "Indonesian definition of the CORRECTED word." },
-    context_usage: { type: Type.STRING, description: "Example sentence using the CORRECTED word (EN) + translation (ID)." },
+    word: { type: Type.STRING, description: "The English Target Word." },
+    correctedSource: { type: Type.STRING, description: "The corrected source word (Indonesian) if typo/misconception detected in ID-EN mode. Example: 'Jatuh' if input was 'Jatuhh'." }, 
+    meaning: { type: Type.STRING, description: "Indonesian definition of the English word." },
+    context_usage: { type: Type.STRING, description: "Example sentence using the English word + translation (ID)." },
     nuance_comparison: { type: Type.STRING, description: "Explanation of nuance/detail in Indonesian." },
     synonyms: { type: Type.ARRAY, items: { type: Type.STRING } },
     isTypo: { type: Type.BOOLEAN },
     isMisconception: { type: Type.BOOLEAN },
     errorAnalysis: { 
       type: Type.STRING, 
-      description: "A concise explanation in INDONESIAN about WHY it is wrong (grammar concept or typo confirmation). Do NOT repeat meaning or examples here." 
+      description: "A concise explanation in INDONESIAN about WHY it is wrong. If ID-EN mode, explain the Indonesian misconception/typo (e.g. 'jatuhh' -> 'jatuh'). If EN-ID mode, explain the English grammar mistake." 
     },
     originalInput: { type: Type.STRING },
     category: { type: Type.STRING, enum: ["Literal", "Idiom", "Metaphor", "Proverb", "Slang"] },
@@ -110,7 +111,16 @@ export const AI_OUTPUT_SCHEMAS = {
 export const FeatureRequestSchema = z.discriminatedUnion("feature", [
   z.object({ feature: z.literal("batch_vocab_def"), params: z.object({ words: z.array(z.string()) }) }),
   z.object({ feature: z.literal("translate"), params: z.object({ text: z.string() }) }),
-  z.object({ feature: z.literal("explain_vocab"), params: z.object({ word: z.string() }) }),
+  
+  // UPDATED: Added 'mode' parameter for bidirectional dictionary
+  z.object({ 
+    feature: z.literal("explain_vocab"), 
+    params: z.object({ 
+      word: z.string(),
+      mode: z.enum(['EN-ID', 'ID-EN']).optional().default('EN-ID') 
+    }) 
+  }),
+
   z.object({ feature: z.literal("quick_def"), params: z.object({ word: z.string(), context: z.string() }) }),
   z.object({ feature: z.literal("grammar_check"), params: z.object({ sentence: z.string() }) }),
   z.object({ feature: z.literal("grammar_question"), params: z.object({ level: z.enum(["beginner", "intermediate"]) }) }),
@@ -140,36 +150,74 @@ export const FEATURE_PROMPTS: { [K in FeatureRequest['feature']]: PromptHandler<
     schema: undefined
   }),
   
+  // 🔥 UPDATED LOGIC: STRICT LANGUAGE VALIDATION 🔥
   explain_vocab: (p) => ({
-    prompt: `Role: Smart Dictionary & Grammar Guide. Input: "${p.word}".
+    prompt: `Role: Smart Bilingual Dictionary (Indonesian <-> English).
+             Current Mode: ${p.mode}. 
+             Input Word: "${p.word}".
+
+             ⚠️ STRICT LANGUAGE ENFORCEMENT ⚠️
              
-             PHASE 1: VALIDATION
-             - If not English/Latin, word="INVALID_SCOPE".
+             ${p.mode === 'EN-ID' 
+               ? `
+                  **RULE FOR EN-ID MODE (English Input -> Indonesian Output)**
+                  1. CHECK LANGUAGE: Is "${p.word}" an English word? 
+                     - Note: Ignore minor typos (e.g., "thnik" is English).
+                     - CRITICAL: If the word is clearly INDONESIAN (e.g., "Rehat", "Makan", "Lari"), you MUST REJECT it.
+                  2. ACTION:
+                     - If INDONESIAN: Set word="INVALID_SCOPE". (User should switch to ID-EN mode).
+                     - If ENGLISH (or English typo): Proceed to explain it in Indonesian.
+               `
+               : `
+                  **RULE FOR ID-EN MODE (Indonesian Input -> English Output)**
+                  1. CHECK LANGUAGE: Is "${p.word}" an Indonesian word?
+                     - Note: Ignore minor typos (e.g., "jatuhh" is Indonesian).
+                     - CRITICAL: If the word is clearly ENGLISH (e.g., "Eat", "Sleep", "Run"), you MUST REJECT it.
+                  2. ACTION:
+                     - If ENGLISH: Set word="INVALID_SCOPE". (User should switch to EN-ID mode).
+                     - If INDONESIAN (or Indonesian typo): Proceed to translate and explain.
+               `
+             }
 
-             PHASE 2: ERROR ANALYSIS (Priority)
-             1. CHECK MISCONCEPTION (e.g. "buyed", "thinked"):
-                - IF TRUE: 
-                  set isMisconception=true.
-                  word = [Correct Form].
-                  errorAnalysis = "Explain ONLY the grammar concept violated in Indonesian. (e.g., 'Kata kerja ini termasuk irregular verb, sehingga bentuk lampaunya berubah menjadi [word], bukan ditambah akhiran -ed'). Keep it concise."
+             --- IF PASSED LANGUAGE CHECK, PROCEED BELOW ---
 
-             2. CHECK TYPO (e.g. "thnik", "helo"):
-                - IF TRUE (and NOT Misconception):
-                  set isTypo=true.
-                  word = [Corrected Word].
-                  errorAnalysis = "Terdeteksi kesalahan penulisan, kata telah diperbaiki otomatis ke bentuk yang baku."
+             ${p.mode === 'ID-EN' 
+               ? `TASK (Indonesian -> English):
+                  1. ANALYZE INPUT (Indonesian):
+                     - Check for TYPOS (e.g. "jatuhh" -> meant "jatuh").
+                     - Check for MISCONCEPTIONS.
+                     
+                     - IF TYPO DETECTED: 
+                       - Set isTypo = true.
+                       - Set correctedSource = [The Correct INDONESIAN Word] (e.g. "jatuh").
+                       - Set errorAnalysis = "Terdeteksi kesalahan penulisan (typo) dari kata bahasa Indonesia '${p.word}'. Kata dikoreksi menjadi '[Corrected]'."
+                  
+                  2. TRANSLATE: 
+                     - Translate the *corrected* Indonesian word to the BEST English Target Word.
+                     - e.g. "jatuh" -> "Fall".
+                  
+                  3. GENERATE JSON:
+                     - Set word = English Target Word ("Fall").`
+               
+               : `TASK (English -> Indonesian):
+                  1. Check English typos/grammar (e.g. "buyed" -> "bought").
+                  2. Set word = Corrected English Word.
+                  3. Explain in Indonesian.`
+             }
 
-             PHASE 3: CONTENT GENERATION (Based on CORRECTED word)
-             - meaning: Indonesian definition.
-             - context_usage: English sentence + Indo translation.
-             - nuance_comparison: Usage nuance explanation in Indonesian.
-             - synonyms: List of synonyms.
-             - category: Detect "Literal", "Idiom", "Metaphor", "Proverb", or "Slang".
-             - If Idiom/Metaphor: fill literal_meaning & figurative_meaning.`,
+             OUTPUT JSON RULES:
+             - **word**: The English Target Word (e.g. "Fall").
+             - **correctedSource**: The corrected INDONESIAN word (e.g. "Kenyang"). ONLY used if isTypo/isMisconception is true in ID-EN mode.
+             - **originalInput**: Return "${p.word}".
+             - **meaning**: Indonesian definition of the English word ("Penyelamat", "Kenyang", etc).
+             - **context_usage**: English sentence + Indo translation.
+             - **nuance_comparison**: Explanation in Indonesian.
+             - **synonyms**: English synonyms.
+             - **category**: "Literal", "Idiom", etc.
+             `,
     schema: AI_OUTPUT_SCHEMAS.explainVocab
   }),
 
-  // 🔥 UPDATE 1: CONTEXTUAL DEFINITION (Balanced) 🔥
   quick_def: (p) => ({
     prompt: `Role: Contextual Translator.
              Task: Translate the term '${p.word}' into Indonesian based on this specific context: '${p.context}'.
@@ -206,8 +254,6 @@ export const FEATURE_PROMPTS: { [K in FeatureRequest['feature']]: PromptHandler<
     prompt: `Original: "${p.orig}". User: "${p.user}". Rate 0-10 & feedback in Indo.`,
     schema: AI_OUTPUT_SCHEMAS.evaluation
   }),
-
-  // 🔥 UPDATE 2: SMART BATCH ANALYSIS (Balanced) 🔥
   analyze_story_vocab: (p) => ({
     prompt: `Analyze Sentence: "${p.sentence}"
              Task: Identify 3-5 most important vocabulary items (difficult words OR idioms) for an Indonesian learner.
@@ -219,7 +265,6 @@ export const FEATURE_PROMPTS: { [K in FeatureRequest['feature']]: PromptHandler<
              Output JSON: recommendations[{ text, type="word"|"phrase", translation }].`,
     schema: AI_OUTPUT_SCHEMAS.storyAnalysis
   }),
-
   evaluate_recall: (p) => ({
     prompt: `Target: ${p.word} (${p.correctAnswer}). User: "${p.userAnswer}". Correct? Feedback in Indo.`,
     schema: AI_OUTPUT_SCHEMAS.recall

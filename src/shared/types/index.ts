@@ -33,6 +33,7 @@ export interface VocabResult {
   misconceptionRule?: string;
   errorAnalysis?: string; 
   originalInput?: string;
+  correctedSource?: string;
   category?: 'Literal' | 'Idiom' | 'Metaphor' | 'Proverb' | 'Slang';
   literal_meaning?: string;
   figurative_meaning?: string;

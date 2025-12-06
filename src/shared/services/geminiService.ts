@@ -76,10 +76,11 @@ export const GeminiService = {
       () => callAI('translate', { text })
     ),
 
-  explainVocab: (word: string) => 
+  explainVocab: (word: string, mode: 'EN-ID' | 'ID-EN' = 'EN-ID') => 
     withTelemetry<VocabResult>(
-      "Vocab Builder", null, `Explain: "${word}"`, 
-      () => callAI('explain_vocab', { word })
+      "Vocab Builder", null, `Explain: "${word}" (Mode: ${mode})`, 
+      // Teruskan 'mode' ke dalam payload params
+      () => callAI('explain_vocab', { word, mode }) 
     ),
 
   getWordDefinition: (word: string, context: string) =>

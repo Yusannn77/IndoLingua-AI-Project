@@ -3,7 +3,12 @@ import { Prisma } from '@prisma/client';
 import { CreateFlashcardInput } from '@/shared/types';
 
 export const FlashcardService = {
+  /**
+   * Membuat kartu baru. 
+   * Jika kata belum ada di kamus, akan dibuatkan entry kamusnya dulu.
+   */
   async createCard(input: CreateFlashcardInput) {
+    // 1. Upsert Dictionary Entry untuk memastikan kata ada di database
     const entry = await prisma.dictionaryEntry.upsert({
       where: { word: input.word },
       update: {},
@@ -17,14 +22,16 @@ export const FlashcardService = {
       }
     });
 
+    // 2. Cek apakah Flashcard untuk kata ini sudah aktif
     const existingCard = await prisma.flashcard.findUnique({
       where: { dictionaryEntryId: entry.id }
     });
 
     if (existingCard) {
-      throw new Error(`Kartu untuk kata "${input.word}" sudah ada.`);
+      throw new Error(`Kartu untuk kata "${input.word}" sudah ada di koleksi.`);
     }
 
+    // 3. Buat Flashcard baru
     const newCard = await prisma.flashcard.create({
       data: {
         dictionaryEntryId: entry.id,
@@ -32,7 +39,7 @@ export const FlashcardService = {
         sourceContext: input.contextUsage,
         status: 'NEW',
         masteryLevel: 0,
-        nextReviewDate: new Date()
+        nextReviewDate: new Date() // Siap direview segera
       },
       include: { dictionaryEntry: true }
     });
@@ -40,10 +47,15 @@ export const FlashcardService = {
     return newCard;
   },
 
+  /**
+   * Mengambil daftar kartu dengan sorting cerdas.
+   * @param onlyDue Jika true, hanya ambil yang jadwalnya sudah tiba (untuk Quiz).
+   */
   async getCards(onlyDue: boolean = false) {
     const whereClause: Prisma.FlashcardWhereInput = {};
     
     if (onlyDue) {
+      // Logic untuk MODE REVIEW: Filter kartu yang jatuh tempo atau baru
       whereClause.OR = [
         { nextReviewDate: { lte: new Date() } }, 
         { status: 'NEW' },
@@ -52,27 +64,35 @@ export const FlashcardService = {
       whereClause.status = { not: 'MASTERED' };
     }
 
+    // 🔥 LOGIC SORTING (SOLUSI ITEM TERBARU MUNCUL DI AWAL) 🔥
+    // Review Mode: Prioritas berdasarkan jadwal (asc).
+    // Collection Mode: Prioritas berdasarkan yang baru dibuat (desc).
+    const orderByClause: Prisma.FlashcardOrderByWithRelationInput = onlyDue 
+      ? { nextReviewDate: 'asc' } 
+      : { createdAt: 'desc' };
+
     const cards = await prisma.flashcard.findMany({
       where: whereClause,
       include: { dictionaryEntry: true },
-      orderBy: { nextReviewDate: 'asc' }
+      orderBy: orderByClause
     });
 
     return cards;
   },
 
-  // --- REFACTORED: SIMPLIFIED MASTERY LOGIC ---
+  /**
+   * Update status hafalan (Spaced Repetition System sederhana).
+   */
   async submitReview(id: string, isRemembered: boolean) {
-    // Logic Baru: Sekali benar langsung MASTERED
     let newStatus = 'LEARNING';
     let newLevel = 0;
     const nextDate = new Date();
 
     if (isRemembered) {
-      // Langsung Tamat
+      // Simplifikasi: Sekali benar langsung MASTERED (Tamat)
       newStatus = 'MASTERED';
-      newLevel = 5; // Max level
-      nextDate.setFullYear(nextDate.getFullYear() + 100); // Review lagi 100 tahun lagi (tidak akan muncul)
+      newLevel = 5; 
+      nextDate.setFullYear(nextDate.getFullYear() + 100); // Jadwal ulang 100 tahun lagi
     } else {
       // Salah -> Ulang besok
       newStatus = 'LEARNING';

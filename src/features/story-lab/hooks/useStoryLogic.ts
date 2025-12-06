@@ -5,8 +5,32 @@ import type { StoryAttempt, CreateStoryAttemptInput, CreateFlashcardInput } from
 export const useStoryLogic = () => {
   const [historyLogs, setHistoryLogs] = useState<StoryAttempt[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  
+  // --- STATE BARU: Menyimpan daftar kata unik yang sudah ada di Flashcard ---
+  // Menggunakan Set<string> agar pengecekan data sangat cepat (O(1))
+  const [savedWordSet, setSavedWordSet] = useState<Set<string>>(new Set());
 
-  // --- HISTORY LOGIC (Tetap Sama) ---
+  // --- 1. FETCH FLASHCARD DATA (Initial Load) ---
+  useEffect(() => {
+    const fetchExistingWords = async () => {
+      try {
+        // Ambil semua kartu (false = ambil semua, bukan hanya yang jatuh tempo)
+        const cards = await DBService.getFlashcards(false);
+        
+        // Masukkan semua kata ke dalam Set dengan format lowercase agar seragam
+        const words = new Set(
+          cards.map(c => c.dictionaryEntry?.word.toLowerCase() || "")
+        );
+        setSavedWordSet(words);
+      } catch (error) {
+        console.error("Gagal memuat daftar kata flashcard:", error);
+      }
+    };
+
+    fetchExistingWords();
+  }, []);
+
+  // --- 2. HISTORY LOGIC (Existing) ---
   const fetchHistory = useCallback(async () => {
     try {
       setIsLoadingHistory(true);
@@ -42,13 +66,19 @@ export const useStoryLogic = () => {
     }
   };
 
-  // --- NEW: FLASHCARD LOGIC (Pengganti addVocab lama) ---
+  // --- 3. FLASHCARD SAVING LOGIC (Updated) ---
   const saveWordToFlashcard = async (
     word: string, 
     meaning: string, 
     contextSentence: string
   ) => {
     if (!word) return false;
+    const cleanWord = word.toLowerCase();
+
+    // Cek di client-side: Jika sudah ada, jangan panggil API
+    if (savedWordSet.has(cleanWord)) {
+        return false;
+    }
 
     const payload: CreateFlashcardInput = {
       word,
@@ -57,15 +87,13 @@ export const useStoryLogic = () => {
       sourceType: 'STORY'
     };
 
-    // Panggil Service Flashcard (Bukan DictionaryEntry langsung)
     const newCard = await DBService.createFlashcard(payload);
 
     if (newCard) {
-      // Sukses
+      // Optimistic Update: Langsung tambahkan ke Set agar UI berubah jadi Hijau
+      setSavedWordSet(prev => new Set(prev).add(cleanWord));
       return true;
     } else {
-      // Gagal (Mungkin duplikat flashcard atau error lain)
-      // Pesan error detail sebaiknya dihandle oleh caller atau toast
       return false;
     }
   };
@@ -75,7 +103,7 @@ export const useStoryLogic = () => {
     isLoadingHistory,
     submitTranslationLog,
     refreshHistory: fetchHistory,
-    // Expose fungsi baru
-    saveWordToFlashcard 
+    saveWordToFlashcard,
+    savedWordSet // <-- Return state ini ke UI
   };
 };

@@ -6,7 +6,7 @@ import {
   XCircle, PlusCircle, Check, Info, BookOpenCheck, 
   ArrowRight, Tag, RefreshCcw, ArrowLeftRight
 } from 'lucide-react';
-import { GeminiService } from '@/shared/services/geminiService';
+import { GroqService } from '@/shared/services/groqService';
 import { DBService } from '@/shared/services/dbService';
 import { VocabResult, CreateFlashcardInput } from '@/shared/types';
 
@@ -62,7 +62,7 @@ const Dictionary: FC = () => {
 
     try {
       // Gunakan activeMode, bukan state 'mode' langsung
-      const result = await GeminiService.explainVocab(query, activeMode);
+      const result = await GroqService.explainVocab(query, activeMode);
       
       if (result.word === 'INVALID_SCOPE') {
          // Pesan error disesuaikan dengan mode

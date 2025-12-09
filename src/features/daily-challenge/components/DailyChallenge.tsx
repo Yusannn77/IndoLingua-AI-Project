@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, type FC } from 'react';
 import { Trophy, CheckCircle, Lock, Brain, Target, ArrowRight, RefreshCcw, Star, Zap, Loader2 } from 'lucide-react';
 // 🔥 FIX: Import dari lokasi Shared baru
-import { GeminiService } from '@/shared/services/geminiService';
+import { GroqService } from '@/shared/services/groqService';
 import { DBService } from '@/shared/services/dbService';
 import { ChallengeFeedback, DailyProgress, SurvivalScenario } from '@/shared/types';
 // 🔥 FIX: Import data dari folder fitur lokal
@@ -105,7 +105,7 @@ const DailyChallenge: FC = () => {
         isFetchingRef.current = true;
         console.log("🔥 Fetching AI Batch for:", missingTargets);
         
-        const res = await GeminiService.getBatchWordDefinitions(missingTargets);
+        const res = await GroqService.getBatchWordDefinitions(missingTargets);
         
         if (res && res.definitions) {
           const newMeanings: Record<string, string> = {};
@@ -158,7 +158,7 @@ const DailyChallenge: FC = () => {
     const word = availableForSurvival[Math.floor(Math.random() * availableForSurvival.length)];
     setLoadingAI(true); setFeedback(null); setResponse(''); setScenario(null);
     try {
-      const data = await GeminiService.generateSurvivalScenario(word);
+      const data = await GroqService.generateSurvivalScenario(word);
       setScenario(data);
     } catch (e) { alert("Limit API tercapai. Coba lagi nanti."); }
     finally { setLoadingAI(false); }
@@ -168,7 +168,7 @@ const DailyChallenge: FC = () => {
     if (!scenario || !response) return;
     setLoadingAI(true);
     try {
-      const res = await GeminiService.evaluateSurvivalResponse(scenario.situation, scenario.word, response);
+      const res = await GroqService.evaluateSurvivalResponse(scenario.situation, scenario.word, response);
       setFeedback(res);
       if (res.score >= 5 && !progress.completed.includes(scenario.word)) {
         updateProgress(prev => ({ ...prev, completed: [...prev.completed, scenario.word] }));

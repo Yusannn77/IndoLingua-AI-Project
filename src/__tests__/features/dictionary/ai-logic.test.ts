@@ -14,7 +14,7 @@ describe('Dictionary Feature: AI Logic Integration & Token Audit', () => {
   it('should correctly analyze complex words (e.g., "Serendipity")', async () => {
     const payload: FeatureRequest = {
       feature: 'explain_vocab',
-      params: { word: 'Serendipity' }
+      params: { word: 'Serendipity', mode: 'EN-ID' }
     };
 
     const res = await POST(createRequest(payload));
@@ -32,7 +32,7 @@ describe('Dictionary Feature: AI Logic Integration & Token Audit', () => {
   it('should automatically detect and correct typos', async () => {
     const payload: FeatureRequest = {
       feature: 'explain_vocab',
-      params: { word: 'thnik' }
+      params: { word: 'thnik', mode: 'EN-ID' }
     };
 
     const res = await POST(createRequest(payload));
@@ -49,7 +49,7 @@ describe('Dictionary Feature: AI Logic Integration & Token Audit', () => {
   it('should identify grammar misconceptions (e.g., irregular verbs)', async () => {
     const payload: FeatureRequest = {
       feature: 'explain_vocab',
-      params: { word: 'buyed' }
+      params: { word: 'buyed', mode: 'EN-ID' }
     };
 
     const res = await POST(createRequest(payload));
@@ -66,7 +66,7 @@ describe('Dictionary Feature: AI Logic Integration & Token Audit', () => {
   it('should correctly identify idioms and figurative meanings', async () => {
     const payload: FeatureRequest = {
       feature: 'explain_vocab',
-      params: { word: 'Break a leg' }
+      params: { word: 'Break a leg', mode: 'EN-ID' }
     };
 
     const res = await POST(createRequest(payload));

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, HelpCircle, Loader2, Sparkles, BookOpen } from 'lucide-react';
-import { GeminiService } from '@/shared/services/geminiService'; // <-- Path Baru
+import { GroqService } from '@/shared/services/groqService'; // <-- Path Baru
 import { GrammarQuestion } from '@/shared/types'; // <-- Path Baru
 import { beginnerQuestions, intermediateQuestions } from '../data/grammarQuestions'; // <-- Relative Path Baru
 
@@ -32,7 +32,7 @@ const GrammarPractice: React.FC = () => {
         setSource('LOCAL');
       } else {
         // OPSI 2: GENERATE VIA AI
-        const q = await GeminiService.generateGrammarQuestion(difficulty);
+        const q = await GroqService.generateGrammarQuestion(difficulty);
         setQuestion(q);
         setSource('AI');
       }

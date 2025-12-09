@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 import { useStoryLogic } from '../hooks/useStoryLogic';
-import { GeminiService } from '@/shared/services/geminiService';
+import { GroqService } from '@/shared/services/groqService';
 import { storyCollection } from '../data/storyData';
 import { StoryScenario, ChallengeFeedback, VocabRecommendation, CachedAnalysis } from '@/shared/types';
 import { StoryHistoryList } from './StoryHistoryList';
@@ -62,7 +62,7 @@ const StoryLab: FC = () => {
           return;
         }
       }
-      const { recommendations: newRecs } = await GeminiService.analyzeStoryVocab(sentence);
+      const { recommendations: newRecs } = await GroqService.analyzeStoryVocab(sentence);
       if (newRecs && newRecs.length > 0) {
         setRecommendations(newRecs);
         localStorage.setItem(cacheKey, JSON.stringify({
@@ -93,7 +93,7 @@ const StoryLab: FC = () => {
     if (!scenario || !userTranslation.trim()) return;
     setLoadingStory(true);
     try {
-      const result = await GeminiService.evaluateStoryTranslation(scenario.sentence, userTranslation);
+      const result = await GroqService.evaluateStoryTranslation(scenario.sentence, userTranslation);
       setStoryFeedback(result);
       setIsProcessingLog(true);
       await submitTranslationLog({
@@ -136,7 +136,7 @@ const StoryLab: FC = () => {
            if (foundWord) {
              translation = foundWord.translation;
            } else {
-             translation = await GeminiService.getWordDefinition(cleanWord, scenario?.sentence || "");
+             translation = await GroqService.getWordDefinition(cleanWord, scenario?.sentence || "");
            }
          }
       }

@@ -22,6 +22,8 @@ interface AIErrorResponse {
 }
 
 // Helper Generic: Memaksa tipe kembalian sesuai T
+// Fungsi ini tetap memanggil endpoint internal yang sama (/api/ai/generate)
+// karena kita akan mengubah logika di balik endpoint tersebut (di server-side) nanti.
 async function callAI<T>(feature: string, params: Record<string, unknown>): Promise<AIResponse<T>> {
   const res = await fetch('/api/ai/generate', {
     method: 'POST',
@@ -58,11 +60,13 @@ async function withTelemetry<T>(
   fn: () => Promise<AIResponse<T>>
 ): Promise<T> {
   const { data, tokens } = await fn();
+  // Log penggunaan token untuk tracking cost/usage
   logHistoryToDB(feature, logInfo, "API", tokens);
   return data;
 }
 
-export const GeminiService = {
+// Export dengan nama baru: GroqService
+export const GroqService = {
   // --- DICTIONARY FEATURE ---
   getBatchWordDefinitions: (words: string[]) =>
     withTelemetry<{ definitions: { word: string; meaning: string }[] }>(
@@ -79,7 +83,6 @@ export const GeminiService = {
   explainVocab: (word: string, mode: 'EN-ID' | 'ID-EN' = 'EN-ID') => 
     withTelemetry<VocabResult>(
       "Vocab Builder", null, `Explain: "${word}" (Mode: ${mode})`, 
-      // Teruskan 'mode' ke dalam payload params
       () => callAI('explain_vocab', { word, mode }) 
     ),
 

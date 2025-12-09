@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef, FC, FormEvent } from 'react';
 import { CheckCircle2, XCircle, ArrowRight, Loader2, RotateCcw } from 'lucide-react';
-import { SavedVocab } from '@/shared/types'; // <-- Path Baru
-import { GeminiService } from '@/shared/services/geminiService'; // <-- Path Baru
+interface SavedVocab {
+  id: string;
+  word: string;
+  translation: string;
+  originalSentence: string;
+  mastered: boolean;
+}
+import { GroqService } from '@/shared/services/groqService'; // <-- Path Baru
 
 interface RecallViewProps {
   vocabList: SavedVocab[];
@@ -43,7 +49,7 @@ export const RecallView: FC<RecallViewProps> = ({ vocabList, onUpdateMastery, on
     setStatus('CHECKING');
 
     try {
-      const result = await GeminiService.evaluateRecall(
+      const result = await GroqService.evaluateRecall(
         activeCard.word,
         activeCard.translation,
         input

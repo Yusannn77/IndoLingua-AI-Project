@@ -5,7 +5,7 @@ import {
   Sparkles, AlertTriangle, CheckCircle2, ArrowRight, 
   Eraser, Copy, Check 
 } from 'lucide-react';
-import { GeminiService } from '@/shared/services/geminiService'; // <-- Path Baru
+import { GroqService } from '@/shared/services/groqService'; // <-- Path Baru
 import { GrammarCheckResult } from '@/shared/types'; // <-- Path Baru
 
 const GrammarChecker: FC = () => {
@@ -25,7 +25,7 @@ const GrammarChecker: FC = () => {
     setCopied(false);
 
     try {
-      const data = await GeminiService.checkGrammar(input);
+      const data = await GroqService.checkGrammar(input);
       setResult(data);
     } catch (err) {
       console.error(err);

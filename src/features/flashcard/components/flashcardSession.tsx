@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useFlashcards } from '../hooks/useFlashcards';
 import { FlashcardItem } from './flashcardItem';
 import { Loader2, Trophy, Layers, CheckCircle2, XCircle, ArrowRight, RefreshCw } from 'lucide-react';
-import { GeminiService } from '@/shared/services/geminiService';
+import { GroqService } from '@/shared/services/groqService';
 
 interface FlashcardSessionProps {
   mode?: 'ALL' | 'REVIEW_ONLY';
@@ -37,7 +37,7 @@ export const FlashcardSession = ({ mode = 'REVIEW_ONLY', onExit }: FlashcardSess
     setCheckStatus('CHECKING');
 
     try {
-      const result = await GeminiService.evaluateRecall(
+      const result = await GroqService.evaluateRecall(
         currentCard.dictionaryEntry?.word || "",
         currentCard.dictionaryEntry?.meaning || "",
         userInput

@@ -300,4 +300,92 @@ describe('Prompt Registry', () => {
             }
         });
     });
+
+    // ===========================================
+    // NEW: Edge Cases & Special Characters
+    // ===========================================
+    describe('Edge Cases - Special Characters', () => {
+        it('buildBatchVocabPrompt should handle words with special characters', () => {
+            const words = ["can't", "self-aware", "it's"];
+            const result = buildBatchVocabPrompt(words);
+
+            expect(result.prompt).toContain("can't");
+            expect(result.prompt).toContain("self-aware");
+        });
+
+        it('buildTranslatePrompt should handle text with quotes', () => {
+            const text = 'She said "hello" to me';
+            const result = buildTranslatePrompt(text);
+
+            expect(result.prompt).toContain('She said');
+            expect(result.prompt).toContain('hello');
+        });
+
+        it('buildQuickDefPrompt should handle context with quotes', () => {
+            const result = buildQuickDefPrompt('run', 'He said "run" quickly');
+
+            expect(result.prompt).toContain('run');
+            expect(result.prompt).toContain('quickly');
+        });
+
+        it('buildGrammarCheckPrompt should handle sentence with apostrophe', () => {
+            const result = buildGrammarCheckPrompt("I don't know what she's talking about");
+
+            expect(result.prompt).toContain("don't");
+            expect(result.prompt).toContain("she's");
+        });
+
+        it('buildExplainVocabPrompt should handle hyphenated words', () => {
+            const result = buildExplainVocabPrompt('well-known');
+
+            expect(result.prompt).toContain('well-known');
+        });
+    });
+
+    describe('Edge Cases - Empty and Minimal Inputs', () => {
+        it('buildTranslatePrompt should handle single character', () => {
+            const result = buildTranslatePrompt('a');
+
+            expect(result.prompt).toBeDefined();
+            expect(result.config.model).toBe(DEFAULT_MODEL);
+        });
+
+        it('buildGrammarCheckPrompt should handle single word', () => {
+            const result = buildGrammarCheckPrompt('Hello');
+
+            expect(result.prompt).toContain('Hello');
+        });
+
+        it('buildQuickDefPrompt should handle empty context', () => {
+            const result = buildQuickDefPrompt('apple', '');
+
+            expect(result.prompt).toContain('apple');
+            expect(result.config.model).toBe(DEFAULT_MODEL);
+        });
+
+        it('buildTranslatePrompt should handle long text', () => {
+            const longText = 'This is a very long sentence that contains many words and should be handled properly by the prompt builder without any issues.';
+            const result = buildTranslatePrompt(longText);
+
+            expect(result.prompt).toContain('This is a very long sentence');
+        });
+    });
+
+    describe('Edge Cases - Unicode and International', () => {
+        it('buildExplainVocabPrompt should handle word with numbers', () => {
+            // Testing edge case even though typically words don't have numbers
+            const result = buildExplainVocabPrompt('24/7');
+
+            expect(result.prompt).toContain('24/7');
+        });
+
+        it('buildTranslatePrompt should handle text with newlines', () => {
+            const text = 'Line one\nLine two';
+            const result = buildTranslatePrompt(text);
+
+            expect(result.prompt).toContain('Line one');
+            expect(result.prompt).toContain('Line two');
+        });
+    });
 });
+

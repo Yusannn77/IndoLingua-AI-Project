@@ -4,7 +4,7 @@ import { assertTestDatabase } from '../../helpers/db-guard';
 import { DictionaryEntryFactory, FlashcardFactory } from '../../helpers/factories';
 
 describe('Flashcard Feature: Persistence Layer', () => {
-  
+
   beforeAll(async () => {
     await assertTestDatabase();
   });
@@ -20,9 +20,10 @@ describe('Flashcard Feature: Persistence Layer', () => {
 
   // --- TEST CASE 1: CREATE FLASHCARD (Happy Path) ---
   it('Should create a Flashcard linked to a DictionaryEntry', async () => {
+    const uniqueWord = `Epiphany_${Date.now()}`;
     // 1. Arrange: Buat Dictionary Entry dulu (Syarat wajib)
     const entry = await prisma.dictionaryEntry.create({
-      data: DictionaryEntryFactory.build({ word: "Epiphany" })
+      data: DictionaryEntryFactory.build({ word: uniqueWord })
     });
 
     // 2. Act: Buat Flashcard yang me-refer ke entry tersebut
@@ -42,11 +43,12 @@ describe('Flashcard Feature: Persistence Layer', () => {
 
   // --- TEST CASE 2: READ WITH RELATION ---
   it('Should retrieve Flashcard along with its Word details', async () => {
+    const uniqueWord = `Serendipity_${Date.now()}`;
     // 1. Arrange
     const entry = await prisma.dictionaryEntry.create({
-      data: DictionaryEntryFactory.build({ word: "Serendipity", meaning: "Keberuntungan" })
+      data: DictionaryEntryFactory.build({ word: uniqueWord, meaning: "Keberuntungan" })
     });
-    
+
     await prisma.flashcard.create({
       data: FlashcardFactory.build(entry.id)
     });
@@ -59,15 +61,16 @@ describe('Flashcard Feature: Persistence Layer', () => {
 
     // 3. Assert
     expect(fetchedCard).not.toBeNull();
-    expect(fetchedCard?.dictionaryEntry.word).toBe("Serendipity");
+    expect(fetchedCard?.dictionaryEntry.word).toBe(uniqueWord);
     expect(fetchedCard?.dictionaryEntry.meaning).toBe("Keberuntungan");
   });
 
   // --- TEST CASE 3: DUPLICATE CONSTRAINT ---
   it('Should prevent duplicate Flashcards for the same Word', async () => {
+    const uniqueWord = `DuplicateCheck_${Date.now()}`;
     // 1. Arrange
     const entry = await prisma.dictionaryEntry.create({
-      data: DictionaryEntryFactory.build({ word: "DuplicateCheck" })
+      data: DictionaryEntryFactory.build({ word: uniqueWord })
     });
 
     // 2. Act: Buat Flashcard pertama (Sukses)

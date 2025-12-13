@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, type FC, type FormEvent } from 'react';
-import { 
-  Search, Quote, Sparkles, AlertCircle, 
-  XCircle, PlusCircle, Check, Info, BookOpenCheck, 
+import {
+  Search, Quote, Sparkles, AlertCircle,
+  XCircle, PlusCircle, Check, Info, BookOpenCheck,
   ArrowRight, Tag, RefreshCcw, ArrowLeftRight
 } from 'lucide-react';
 import { GroqService } from '@/shared/services/groqService';
@@ -11,7 +11,14 @@ import { DBService } from '@/shared/services/dbService';
 import { VocabResult, CreateFlashcardInput } from '@/shared/types';
 
 const MAX_CHARS_DICT = 35;
-const isLatinScript = (text: string): boolean => /^[a-zA-Z\s'-.,!?]+$/.test(text);
+
+/**
+ * isLatinScript - Production-Grade Latin Script Validator
+ * Uses Unicode Property Escapes to support Extended Latin (diacritics),
+ * Indonesian morphology (kupu-kupu), and smart quotes from mobile devices.
+ */
+const isLatinScript = (text: string): boolean =>
+  /^[\p{Script=Latin}\s\-''.,!?]+$/u.test(text);
 
 type DictMode = 'EN-ID' | 'ID-EN';
 
@@ -22,7 +29,7 @@ const Dictionary: FC = () => {
   const [vocabData, setVocabData] = useState<VocabResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
-  const [originalQuery, setOriginalQuery] = useState(''); 
+  const [originalQuery, setOriginalQuery] = useState('');
   const [showInvalidModal, setShowInvalidModal] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,19 +70,19 @@ const Dictionary: FC = () => {
     try {
       // Gunakan activeMode, bukan state 'mode' langsung
       const result = await GroqService.explainVocab(query, activeMode);
-      
+
       if (result.word === 'INVALID_SCOPE') {
-         // Pesan error disesuaikan dengan mode
-         const langName = activeMode === 'EN-ID' ? 'Inggris' : 'Indonesia';
-         setErrorMsg(`"${query}" tidak dapat ditemukan atau bukan kata yang valid dalam Bahasa ${langName}.`);
+        // Pesan error disesuaikan dengan mode
+        const langName = activeMode === 'EN-ID' ? 'Inggris' : 'Indonesia';
+        setErrorMsg(`"${query}" tidak dapat ditemukan atau bukan kata yang valid dalam Bahasa ${langName}.`);
       } else {
-         setVocabData(result);
-         
-         // Sinkronisasi state jika menggunakan override (misal dari klik sinonim)
-         if (overrideMode) {
-           setMode(overrideMode);
-           setInput(result.word); // Opsional: update input field dengan kata yang dicari
-         }
+        setVocabData(result);
+
+        // Sinkronisasi state jika menggunakan override (misal dari klik sinonim)
+        if (overrideMode) {
+          setMode(overrideMode);
+          setInput(result.word); // Opsional: update input field dengan kata yang dicari
+        }
       }
     } catch (err) {
       console.error(err);
@@ -92,11 +99,11 @@ const Dictionary: FC = () => {
       word: vocabData.word,
       meaning: vocabData.meaning,
       contextUsage: vocabData.context_usage,
-      sourceType: 'DICTIONARY' 
+      sourceType: 'DICTIONARY'
     };
 
     const saved = await DBService.createFlashcard(payload);
-    
+
     if (saved) {
       setIsSaved(true);
     } else {
@@ -112,12 +119,12 @@ const Dictionary: FC = () => {
         <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Kamus Kontekstual</h2>
         <p className="text-slate-500 mt-2">Cari definisi, idiom, dan nuansa kata.</p>
       </div>
-      
+
       {/* Search Input Section */}
       <div className="relative z-10">
-        
+
         <div className="flex justify-center mb-4">
-          <button 
+          <button
             onClick={toggleMode}
             className="flex items-center gap-3 px-4 py-2 bg-white border-2 border-slate-200 rounded-full shadow-sm hover:border-blue-400 transition-all active:scale-95 group"
           >
@@ -144,68 +151,67 @@ const Dictionary: FC = () => {
             disabled={loading || !input.trim()}
             className="absolute right-2 top-2 bottom-2 px-6 bg-slate-900 text-white rounded-xl font-medium hover:bg-black disabled:bg-slate-200 disabled:cursor-not-allowed transition-all active:scale-95 flex items-center"
           >
-            {loading ? <Sparkles className="animate-spin" size={20}/> : 'Cari'}
+            {loading ? <Sparkles className="animate-spin" size={20} /> : 'Cari'}
           </button>
         </form>
       </div>
 
       {errorMsg && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 text-red-700 animate-slide-up">
-            <AlertCircle size={20} /> <p className="font-medium">{errorMsg}</p>
+          <AlertCircle size={20} /> <p className="font-medium">{errorMsg}</p>
         </div>
       )}
 
       {loading && (
         <div className="space-y-4 animate-pulse">
-            <div className="bg-slate-100 rounded-xl h-32 w-full"></div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-100 rounded-xl h-24"></div>
-              <div className="bg-slate-100 rounded-xl h-24"></div>
-            </div>
+          <div className="bg-slate-100 rounded-xl h-32 w-full"></div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-slate-100 rounded-xl h-24"></div>
+            <div className="bg-slate-100 rounded-xl h-24"></div>
+          </div>
         </div>
       )}
 
       {vocabData && !loading && (
         <div className="space-y-6 animate-fade-in">
-          
+
           {mode === 'ID-EN' && (
-             <div className="flex items-center gap-2 text-sm text-slate-500 bg-slate-50 px-3 py-2 rounded-lg w-full border border-slate-200 mb-2">
-                <Info size={16} className="text-blue-500 shrink-0"/>
-                <span>Hasil untuk kata Inggris: <strong className="text-slate-800">{vocabData.word}</strong> (Input asli: <em>{originalQuery}</em>)</span>
-             </div>
+            <div className="flex items-center gap-2 text-sm text-slate-500 bg-slate-50 px-3 py-2 rounded-lg w-full border border-slate-200 mb-2">
+              <Info size={16} className="text-blue-500 shrink-0" />
+              <span>Hasil untuk kata Inggris: <strong className="text-slate-800">{vocabData.word}</strong> (Input asli: <em>{originalQuery}</em>)</span>
+            </div>
           )}
 
           {(vocabData.isMisconception || vocabData.isTypo) && (
-            <div className={`rounded-2xl p-5 border-l-4 shadow-sm animate-slide-up ${
-                vocabData.isMisconception 
-                  ? 'bg-violet-50 border-violet-500 text-violet-900' 
-                  : 'bg-amber-50 border-amber-400 text-amber-900'
+            <div className={`rounded-2xl p-5 border-l-4 shadow-sm animate-slide-up ${vocabData.isMisconception
+                ? 'bg-violet-50 border-violet-500 text-violet-900'
+                : 'bg-amber-50 border-amber-400 text-amber-900'
               }`}
             >
               <div className="flex items-start gap-4">
                 <div className="mt-1 shrink-0">
-                  {vocabData.isMisconception 
-                    ? <BookOpenCheck className="text-violet-600" size={24} /> 
+                  {vocabData.isMisconception
+                    ? <BookOpenCheck className="text-violet-600" size={24} />
                     : <RefreshCcw className="text-amber-600" size={22} />
                   }
                 </div>
                 <div className="flex-1 space-y-2">
                   <div className="flex items-center gap-3 font-mono text-lg">
                     {mode === 'ID-EN' && vocabData.correctedSource ? (
-                       <>
-                         <span className="line-through opacity-60">{vocabData.originalInput || originalQuery}</span>
-                         <ArrowRight size={18} className="opacity-60" />
-                         <span className="font-bold tracking-tight text-blue-700">{vocabData.correctedSource}</span>
-                       </>
+                      <>
+                        <span className="line-through opacity-60">{vocabData.originalInput || originalQuery}</span>
+                        <ArrowRight size={18} className="opacity-60" />
+                        <span className="font-bold tracking-tight text-blue-700">{vocabData.correctedSource}</span>
+                      </>
                     ) : (
-                       <>
-                         <span className="line-through opacity-60">{vocabData.originalInput || originalQuery}</span>
-                         <ArrowRight size={18} className="opacity-60" />
-                         <span className="font-bold tracking-tight">{vocabData.word}</span>
-                       </>
+                      <>
+                        <span className="line-through opacity-60">{vocabData.originalInput || originalQuery}</span>
+                        <ArrowRight size={18} className="opacity-60" />
+                        <span className="font-bold tracking-tight">{vocabData.word}</span>
+                      </>
                     )}
                   </div>
-                  
+
                   <p className={`text-sm leading-relaxed ${vocabData.isMisconception ? 'text-violet-800' : 'text-amber-800'}`}>
                     {vocabData.errorAnalysis || "Terdeteksi kesalahan penulisan atau penggunaan kata."}
                   </p>
@@ -215,78 +221,78 @@ const Dictionary: FC = () => {
           )}
 
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 md:p-8 flex flex-col md:flex-row justify-between gap-6 relative overflow-hidden group">
-             <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors ${isFigurative ? 'bg-purple-500' : 'bg-blue-500'}`}></div>
-             
-             <div className="flex-1 space-y-2">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <h3 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">{vocabData.word}</h3>
-                  {isFigurative && (
-                    <span className="px-2.5 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded-full uppercase tracking-wide border border-purple-200">
-                      {vocabData.category}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xl text-slate-600 font-medium leading-relaxed">{vocabData.meaning}</p>
-             </div>
+            <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors ${isFigurative ? 'bg-purple-500' : 'bg-blue-500'}`}></div>
 
-             <div className="flex flex-col items-end gap-4">
-                {/* SINONIM */}
-                <div className="flex flex-wrap gap-2 justify-end">
-                  {vocabData.synonyms?.slice(0, 4).map((syn, i) => (
-                    <button 
-                      key={i} 
-                      onClick={() => { 
-                        // 🔥 UPDATE 2: Logic Pintar Klik Sinonim
-                        // Sinonim selalu bahasa Inggris. Jadi jika kita di mode ID-EN, 
-                        // kita harus paksa switch ke EN-ID agar 'syn' (kata Inggris) bisa diproses.
-                        const nextMode = 'EN-ID'; 
-                        setInput(syn); 
-                        
-                        // Pass 'nextMode' ke handleSearch untuk eksekusi langsung
-                        handleSearch(undefined, syn, nextMode); 
-                      }} 
-                      className="px-3 py-1.5 bg-slate-50 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-100 hover:text-slate-900 transition-colors border border-slate-200"
-                    >
-                      {syn}
-                    </button>
-                  ))}
-                </div>
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h3 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">{vocabData.word}</h3>
+                {isFigurative && (
+                  <span className="px-2.5 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded-full uppercase tracking-wide border border-purple-200">
+                    {vocabData.category}
+                  </span>
+                )}
+              </div>
+              <p className="text-xl text-slate-600 font-medium leading-relaxed">{vocabData.meaning}</p>
+            </div>
 
-                <button onClick={handleSaveFlashcard} disabled={isSaved} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-sm ${isSaved ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'}`}>
-                   {isSaved ? <Check size={18}/> : <PlusCircle size={18}/>} {isSaved ? 'Tersimpan' : 'Simpan Flashcard'}
-                </button>
-             </div>
+            <div className="flex flex-col items-end gap-4">
+              {/* SINONIM */}
+              <div className="flex flex-wrap gap-2 justify-end">
+                {vocabData.synonyms?.slice(0, 4).map((syn, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      // 🔥 UPDATE 2: Logic Pintar Klik Sinonim
+                      // Sinonim selalu bahasa Inggris. Jadi jika kita di mode ID-EN, 
+                      // kita harus paksa switch ke EN-ID agar 'syn' (kata Inggris) bisa diproses.
+                      const nextMode = 'EN-ID';
+                      setInput(syn);
+
+                      // Pass 'nextMode' ke handleSearch untuk eksekusi langsung
+                      handleSearch(undefined, syn, nextMode);
+                    }}
+                    className="px-3 py-1.5 bg-slate-50 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-100 hover:text-slate-900 transition-colors border border-slate-200"
+                  >
+                    {syn}
+                  </button>
+                ))}
+              </div>
+
+              <button onClick={handleSaveFlashcard} disabled={isSaved} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-sm ${isSaved ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'}`}>
+                {isSaved ? <Check size={18} /> : <PlusCircle size={18} />} {isSaved ? 'Tersimpan' : 'Simpan Flashcard'}
+              </button>
+            </div>
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">
-             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 hover:bg-white hover:shadow-md transition-all">
-                <div className="flex items-center gap-2 text-amber-600 mb-3 font-bold text-sm uppercase tracking-wide">
-                  {isFigurative ? <Tag size={16}/> : <Info size={16}/>} 
-                  {isFigurative ? "Analisis Makna" : "Nuansa & Detail"}
-                </div>
-                {isFigurative ? (
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between border-b border-slate-200 pb-2">
-                      <span className="text-slate-400 font-bold uppercase text-xs">Literal</span>
-                      <span className="text-slate-800 font-medium text-right">{vocabData.literal_meaning}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-bold uppercase text-xs">Figuratif</span>
-                      <span className="text-purple-700 font-bold text-right">{vocabData.figurative_meaning}</span>
-                    </div>
-                    <p className="text-slate-600 mt-2 italic border-t border-slate-200 pt-2">{vocabData.nuance_comparison}</p>
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 hover:bg-white hover:shadow-md transition-all">
+              <div className="flex items-center gap-2 text-amber-600 mb-3 font-bold text-sm uppercase tracking-wide">
+                {isFigurative ? <Tag size={16} /> : <Info size={16} />}
+                {isFigurative ? "Analisis Makna" : "Nuansa & Detail"}
+              </div>
+              {isFigurative ? (
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between border-b border-slate-200 pb-2">
+                    <span className="text-slate-400 font-bold uppercase text-xs">Literal</span>
+                    <span className="text-slate-800 font-medium text-right">{vocabData.literal_meaning}</span>
                   </div>
-                ) : (
-                  <p className="text-slate-700 leading-relaxed font-medium">{vocabData.nuance_comparison}</p>
-                )}
-             </div>
-
-             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 hover:bg-white hover:shadow-md transition-all">
-                <div className="flex items-center gap-2 text-purple-600 mb-3 font-bold text-sm uppercase tracking-wide">
-                  <Quote size={16}/> Konteks Penggunaan
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 font-bold uppercase text-xs">Figuratif</span>
+                    <span className="text-purple-700 font-bold text-right">{vocabData.figurative_meaning}</span>
+                  </div>
+                  <p className="text-slate-600 mt-2 italic border-t border-slate-200 pt-2">{vocabData.nuance_comparison}</p>
                 </div>
-                <p className="text-slate-700 italic text-lg leading-relaxed">&quot;{vocabData.context_usage}&quot;</p>
-             </div>
+              ) : (
+                <p className="text-slate-700 leading-relaxed font-medium">{vocabData.nuance_comparison}</p>
+              )}
+            </div>
+
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 hover:bg-white hover:shadow-md transition-all">
+              <div className="flex items-center gap-2 text-purple-600 mb-3 font-bold text-sm uppercase tracking-wide">
+                <Quote size={16} /> Konteks Penggunaan
+              </div>
+              <p className="text-slate-700 italic text-lg leading-relaxed">&quot;{vocabData.context_usage}&quot;</p>
+            </div>
           </div>
         </div>
       )}

@@ -301,7 +301,16 @@ export function buildEvaluateRecallPrompt(word: string, correctAnswer: string, u
 export function buildSurvivalScenarioPrompt(word: string): PromptResult {
     const config: PromptConfig = {
         systemPrompt: SYSTEM_PROMPTS.survivalCoach,
-        userPrompt: `Create survival situation using "${word}". Return JSON.`,
+        userPrompt: `Create a survival situation for the English word "${word}".
+
+RULES:
+1. The scenario MUST be written entirely in Bahasa Indonesia.
+2. DO NOT use the English word "${word}" in the scenario text.
+3. Instead, use the Indonesian TRANSLATION of "${word}" naturally within the Indonesian sentence.
+4. The scenario should be practical, realistic, and help learners understand when to use this word.
+
+Return JSON { "word": "${word}", "situation": "..." }
+The "situation" field must be 100% in Indonesian with NO English words.`,
         model: DEFAULT_MODEL,
         temperature: 0.7,
     };
@@ -318,7 +327,19 @@ export function buildSurvivalScenarioPrompt(word: string): PromptResult {
 export function buildEvaluateSurvivalPrompt(situation: string, word: string, response: string): PromptResult {
     const config: PromptConfig = {
         systemPrompt: SYSTEM_PROMPTS.evaluator,
-        userPrompt: `Sit: ${situation}. Word: ${word}. Action: "${response}". Succeed? Return JSON.`,
+        userPrompt: `Evaluasi jawaban user:
+Konteks situasi: ${situation}
+Target kata: ${word}
+Jawaban user: "${response}"
+
+Berikan penilaian apakah user berhasil menggunakan kata "${word}" dengan tepat dalam konteks.
+
+PENTING:
+- "feedback" WAJIB dalam Bahasa Indonesia
+- "improved_response" WAJIB dalam format: "English sentence. (Terjemahan Indonesia)"
+  Contoh: "You are very benevolent for helping me. (Anda sangat baik hati karena membantu saya.)"
+  
+Return JSON { "score": 0-10, "feedback": "...", "improved_response": "..." }`,
         model: DEFAULT_MODEL,
         temperature: 0.5,
     };

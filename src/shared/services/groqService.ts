@@ -27,7 +27,7 @@ interface AIErrorResponse {
 async function callAI<T>(feature: string, params: Record<string, unknown>): Promise<AIResponse<T>> {
   const res = await fetch('/api/ai/generate', {
     method: 'POST',
-    headers: { 
+    headers: {
       'Content-Type': 'application/json',
       ...API_SECRET_HEADER
     },
@@ -38,14 +38,14 @@ async function callAI<T>(feature: string, params: Record<string, unknown>): Prom
     const err = (await res.json()) as AIErrorResponse;
     throw new Error(err.error || 'AI Service Failed');
   }
-  
+
   return (await res.json()) as AIResponse<T>;
 }
 
 const logHistoryToDB = (feature: string, details: string, source: 'API' | 'CACHE', tokens = 0): void => {
   fetch('/api/history', {
     method: 'POST',
-    headers: { 
+    headers: {
       'Content-Type': 'application/json',
       ...API_SECRET_HEADER
     },
@@ -55,7 +55,7 @@ const logHistoryToDB = (feature: string, details: string, source: 'API' | 'CACHE
 
 async function withTelemetry<T>(
   feature: string,
-  cacheKey: string | null, 
+  cacheKey: string | null,
   logInfo: string,
   fn: () => Promise<AIResponse<T>>
 ): Promise<T> {
@@ -70,20 +70,20 @@ export const GroqService = {
   // --- DICTIONARY FEATURE ---
   getBatchWordDefinitions: (words: string[]) =>
     withTelemetry<{ definitions: { word: string; meaning: string }[] }>(
-      "Vocab Batch", null, `Batch translate ${words.length} words`, 
+      "Vocab Batch", null, `Batch translate ${words.length} words`,
       () => callAI('batch_vocab_def', { words })
     ),
 
-  translateAndExplain: (text: string) => 
+  translateAndExplain: (text: string) =>
     withTelemetry<TranslationResult>(
-      "Translator", null, `Translate: ${text.substring(0,20)}...`, 
+      "Translator", null, `Translate: ${text.substring(0, 20)}...`,
       () => callAI('translate', { text })
     ),
 
-  explainVocab: (word: string, mode: 'EN-ID' | 'ID-EN' = 'EN-ID') => 
+  explainVocab: (word: string, mode: 'EN-ID' | 'ID-EN' = 'EN-ID') =>
     withTelemetry<VocabResult>(
-      "Vocab Builder", null, `Explain: "${word}" (Mode: ${mode})`, 
-      () => callAI('explain_vocab', { word, mode }) 
+      "Vocab Builder", null, `Explain: "${word}" (Mode: ${mode})`,
+      () => callAI('explain_vocab', { word, mode })
     ),
 
   getWordDefinition: (word: string, context: string) =>
@@ -99,26 +99,26 @@ export const GroqService = {
 
   generateGrammarQuestion: (level: 'beginner' | 'intermediate') =>
     withTelemetry<GrammarQuestion>(
-      "Grammar", null, `Question (${level})`, 
+      "Grammar", null, `Question (${level})`,
       () => callAI('grammar_question', { level })
     ),
 
   // --- STORY & CHALLENGE FEATURES ---
   evaluateChallengeResponse: (scenario: string, phrase: string, user: string) =>
     withTelemetry<ChallengeFeedback>(
-      "Challenge", null, "Eval Challenge", 
+      "Challenge", null, "Eval Challenge",
       () => callAI('evaluate_challenge', { scenario, phrase, user })
     ),
 
   generateStorySentence: () =>
     withTelemetry<StoryScenario>(
-      "Story", null, "Generate Story", 
+      "Story", null, "Generate Story",
       () => callAI('generate_story', {})
     ),
 
   evaluateStoryTranslation: (orig: string, user: string) =>
     withTelemetry<ChallengeFeedback>(
-      "Story Eval", null, "Eval Story Translation", 
+      "Story Eval", null, "Eval Story Translation",
       () => callAI('evaluate_story', { orig, user })
     ),
 
@@ -135,8 +135,14 @@ export const GroqService = {
     ),
 
   generateSurvivalScenario: (word: string) =>
-    callAI<SurvivalScenario>('survival_scenario', { word }).then(r => r.data),
+    withTelemetry<SurvivalScenario>(
+      "Survival Scenario", null, `Generate scenario: ${word}`,
+      () => callAI('survival_scenario', { word })
+    ),
 
   evaluateSurvivalResponse: (sit: string, word: string, res: string) =>
-    callAI<ChallengeFeedback>('evaluate_survival', { sit, word, res }).then(r => r.data),
+    withTelemetry<ChallengeFeedback>(
+      "Survival Eval", null, `Eval survival: ${word}`,
+      () => callAI('evaluate_survival', { sit, word, res })
+    ),
 };

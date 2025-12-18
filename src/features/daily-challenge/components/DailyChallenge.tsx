@@ -57,7 +57,14 @@ const VocabCard: FC<VocabCardProps> = ({ word, meaning, isMemorized, isCompleted
 
 // --- MAIN COMPONENT ---
 const DailyChallenge: FC = () => {
-  const getTodayString = () => new Date().toISOString().split('T')[0];
+  // 🔥 FIX TIMEZONE: Gunakan waktu lokal, bukan UTC
+  const getTodayString = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
   const [today, setToday] = useState(getTodayString());
   const [progress, setProgress] = useState<DailyProgress | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -160,103 +167,99 @@ const DailyChallenge: FC = () => {
     });
   };
 
-  // 🔥 FIX: Gunakan ref untuk menyimpan state terkini tanpa trigger re-render
+  // 🔥 REFACTOR: Refs untuk tracking state tanpa re-render
   const currentDateRef = useRef(today);
+  const hasFetchedMeaningsRef = useRef(false); // Track apakah meanings sudah di-fetch
+  const isInitializedRef = useRef(false); // Track apakah sudah init
+
   currentDateRef.current = today;
 
-  // useEffect untuk inisialisasi data (hanya sekali saat mount)
-  useEffect(() => {
-    const initData = async () => {
+  // 🔥 CONSOLIDATED: Satu fungsi untuk load data + fetch meanings
+  const loadDailyData = async (date: string, forceRefreshMeanings = false) => {
+    if (isFetchingRef.current) return; // Prevent concurrent fetches
+
+    try {
+      isFetchingRef.current = true;
       setIsLoadingData(true);
-      try {
-        const date = getTodayString();
-        setToday(date);
-        let data = await DBService.getDailyProgress(date);
 
-        if (!data) {
-          data = generateDailyMission(date);
-          await DBService.saveDailyProgress(data);
+      // Step 1: Load or create progress
+      let data = await DBService.getDailyProgress(date);
+      if (!data) {
+        data = generateDailyMission(date);
+        await DBService.saveDailyProgress(data);
+      }
+
+      if (!data.meanings || typeof data.meanings !== 'object') {
+        data.meanings = {};
+      }
+
+      // Step 2: Check if meanings need to be fetched
+      const missingTargets = data.targets.filter(word => !data.meanings?.[word]);
+
+      if (missingTargets.length > 0 && (forceRefreshMeanings || !hasFetchedMeaningsRef.current)) {
+        console.log("🔥 Fetching AI Batch for:", missingTargets);
+
+        try {
+          const res = await GroqService.getBatchWordDefinitions(missingTargets);
+
+          if (res?.definitions) {
+            const newMeanings: Record<string, string> = {};
+            res.definitions.forEach(item => {
+              newMeanings[item.word] = item.meaning;
+            });
+            data.meanings = { ...data.meanings, ...newMeanings };
+            await DBService.saveDailyProgress(data);
+          }
+        } catch (error) {
+          console.error("Gagal mengambil arti batch:", error);
+          // Set fallback for failed words
+          missingTargets.forEach(word => {
+            if (!data.meanings?.[word]) {
+              data.meanings![word] = '(Gagal memuat arti)';
+            }
+          });
         }
 
-        if (!data.meanings || typeof data.meanings !== 'object') {
-          data.meanings = {};
-        }
+        hasFetchedMeaningsRef.current = true;
+      }
 
-        setProgress(data);
-      } catch (e) { console.error(e); }
-      finally { setIsLoadingData(false); }
-    };
-    initData();
-  }, []); // ← Hanya sekali saat mount
+      setProgress(data);
+      setToday(date);
 
-  // useEffect terpisah untuk polling perubahan hari (stable interval)
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingData(false);
+      isFetchingRef.current = false;
+    }
+  };
+
+  // 🔥 INIT: Hanya sekali saat mount
+  useEffect(() => {
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
+
+    const date = getTodayString();
+    loadDailyData(date);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 🔥 DAY CHANGE POLLING: Check setiap 60 detik
   useEffect(() => {
     const checkDayChange = async () => {
       const newDate = getTodayString();
 
-      // 🔥 FIX: Gunakan ref untuk cek tanpa trigger re-render berlebihan
       if (newDate !== currentDateRef.current) {
         console.log('🔄 Hari berubah! Memuat ulang Daily Challenge...');
-        setIsLoadingData(true);
-        setToday(newDate);
-
-        try {
-          let data = await DBService.getDailyProgress(newDate);
-          if (!data) {
-            data = generateDailyMission(newDate);
-            await DBService.saveDailyProgress(data);
-          }
-          if (!data.meanings || typeof data.meanings !== 'object') {
-            data.meanings = {};
-          }
-          setProgress(data);
-        } catch (e) { console.error(e); }
-        finally { setIsLoadingData(false); }
+        hasFetchedMeaningsRef.current = false; // Reset untuk hari baru
+        await loadDailyData(newDate, true);
       }
     };
 
-    // Polling setiap 60 detik
     const intervalId = setInterval(checkDayChange, 60000);
-
     return () => clearInterval(intervalId);
-  }, []); // ← Empty dependency = interval stabil, tidak di-recreate
-
-  useEffect(() => {
-    if (!progress || isLoadingData) return;
-    if (isFetchingRef.current) return;
-
-    const missingTargets = progress.targets.filter(word => !progress.meanings?.[word]);
-
-    if (missingTargets.length === 0) return;
-
-    const fetchBatch = async () => {
-      try {
-        isFetchingRef.current = true;
-        console.log("🔥 Fetching AI Batch for:", missingTargets);
-
-        const res = await GroqService.getBatchWordDefinitions(missingTargets);
-
-        if (res && res.definitions) {
-          const newMeanings: Record<string, string> = {};
-          res.definitions.forEach(item => {
-            newMeanings[item.word] = item.meaning;
-          });
-
-          updateProgress(prev => ({
-            ...prev,
-            meanings: { ...prev.meanings, ...newMeanings }
-          }));
-        }
-      } catch (error) {
-        console.error("Gagal mengambil arti batch:", error);
-      } finally {
-        isFetchingRef.current = false;
-      }
-    };
-
-    fetchBatch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [progress?.targets, isLoadingData]);
+  }, []);
 
   if (isLoadingData || !progress) {
     return (

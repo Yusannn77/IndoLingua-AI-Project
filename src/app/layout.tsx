@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Sidebar from "../components/Sidebar"; // Relative path yang aman
+import Sidebar from "../components/Sidebar";
+import { TemporalProvider } from "@/shared/contexts/TemporalContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,15 +19,17 @@ export default function RootLayout({
   return (
     <html lang="id">
       <body className={`${inter.className} bg-slate-50 flex flex-col lg:flex-row min-h-screen`}>
-        <Sidebar />
-        <main className="flex-1 flex flex-col h-screen overflow-hidden">
-          <div className="h-16 lg:h-0 flex-shrink-0" />
-          <div className="flex-1 overflow-y-auto p-4 lg:p-8">
-            <div className="max-w-5xl mx-auto pb-10">
-              {children}
+        <TemporalProvider>
+          <Sidebar />
+          <main className="flex-1 flex flex-col h-screen overflow-hidden">
+            <div className="h-16 lg:h-0 flex-shrink-0" />
+            <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+              <div className="max-w-5xl mx-auto pb-10">
+                {children}
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
+        </TemporalProvider>
       </body>
     </html>
   );

@@ -51,6 +51,9 @@ model Flashcard {
   nextReviewDate    DateTime? 
   lastReviewedAt    DateTime?
 
+  // 🔥 NEW: Relasi ke progress log
+  progressLogs      FlashcardProgressLog[]
+
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -111,4 +114,65 @@ model GrammarQuestion {
   createdAt    DateTime @default(now())
 
   @@index([difficulty])
+}
+
+// ============================================
+// 🔥 NEW: PROGRESS TEMPORAL MODELS
+// ============================================
+
+/// Log setiap transisi status flashcard untuk tracking progress
+model FlashcardProgressLog {
+  id          String    @id @default(cuid())
+  flashcardId String
+  flashcard   Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  
+  /// Status sebelum transisi (null jika kartu baru dibuat)
+  fromStatus  String?   // 'NEW', 'LEARNING', 'REVIEWING', 'MASTERED'
+  /// Status setelah transisi
+  toStatus    String    // 'NEW', 'LEARNING', 'REVIEWING', 'MASTERED'
+  
+  /// Level mastery sebelum transisi
+  fromLevel   Int       @default(0)
+  /// Level mastery setelah transisi
+  toLevel     Int       @default(0)
+  
+  /// Trigger yang menyebabkan transisi
+  trigger     String    @default("REVIEW") // 'REVIEW', 'CREATE', 'RESET'
+  
+  createdAt   DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([flashcardId])
+}
+
+/// Snapshot progres bulanan untuk query cepat
+model MonthlySnapshot {
+  id                  String   @id @default(cuid())
+  month               Int      // 0-11 (JavaScript Date standard)
+  year                Int
+  
+  // === Vocabulary Metrics ===
+  wordsAdded          Int      @default(0)  // DictionaryEntry baru
+  cardsCreated        Int      @default(0)  // Flashcard baru
+  cardsMastered       Int      @default(0)  // Transisi ke MASTERED
+  cardsReviewed       Int      @default(0)  // Total review sessions
+  
+  // === Story Lab Metrics ===
+  storyAttempts       Int      @default(0)  // Total story attempts
+  storyAvgScore       Float    @default(0)  // Rata-rata skor
+  storyBestScore      Int      @default(0)  // Skor tertinggi
+  
+  // === AI Usage Metrics ===
+  tokensUsed          Int      @default(0)  // Total token AI
+  aiRequests          Int      @default(0)  // Total request ke AI
+  
+  // === Daily Challenge Metrics ===
+  challengesCompleted Int      @default(0)  // Tantangan harian selesai
+  survivalPassed      Int      @default(0)  // Survival mode passed
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([month, year])
+  @@index([year, month])
 }
